@@ -1,0 +1,120 @@
+{
+  "name": "virtual-office",
+  "version": "1.0.0",
+  "homepage": "https://github.com/Dev-pradhuman/v-office",
+  "description": "Virtual Office for the Team",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "dev": "electron . --no-sandbox",
+    "start:server": "node server-only.js",
+    "build:frontend": "npm --prefix \"Team Hearth\" run build",
+    "build:win": "npm run build:frontend && electron-builder --win",
+    "build:linux": "npm run build:frontend && electron-builder --linux",
+    "build": "npm run build:frontend && electron-builder"
+  },
+  "build": {
+    "appId": "com.virtualoffice.app",
+    "productName": "Virtual Office",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Pradhuman",
+        "repo": "virtual-office"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater.js",
+      "server-only.js",
+      "backend/**/*",
+      "frontend/**/*",
+      "Team Hearth/dist/**/*",
+      "node_modules/**/*",
+      "!Team Hearth/node_modules/**/*",
+      "!Team Hearth/src/**/*",
+      "!Team Hearth/public/**/*",
+      "!**/*.map"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "frontend/assets/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Office",
+      "icon": "frontend/assets/icon.png"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "frontend/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Virtual Office"
+    }
+  },
+  "author": {
+    "name": "Pradhuman",
+    "email": "pradhuman@example.com"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.9",
+    "express": "^4.21.2",
+    "googleapis": "^173.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "socket.io": "^4.8.1",
+    "sqlite3": "^5.1.7",
+    "three": "^0.184.0"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "devDependencies": {
+    "electron": "^42.3.3",
+    "electron-builder": "^26.15.0",
+    "jimp": "^1.6.1",
+    "png-to-ico": "^3.0.1"
+  },
+  "optionalDependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6"
+  }
+}

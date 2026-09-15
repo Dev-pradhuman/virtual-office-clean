@@ -1,0 +1,39 @@
+# Render Blueprint for the Virtual Office backend.
+# This file documents (and, if you create the service via Render "Blueprints",
+# provisions) the web service that runs the Express + Socket.IO backend.
+#
+# The SAME repo content is pushed to two remotes/services:
+#   - origin (v-office)      -> prod  -> https://virtual-office-hq.onrender.com
+#   - test   (v-office-test) -> test  -> https://virtual-office-hq-test.onrender.com
+# Because both share this file, the values that DIFFER between the two
+# (ALLOWED_ORIGINS, ADMIN_USERNAME) are marked `sync: false` so you set them
+# per-service in the Render dashboard. JWT_SECRET is auto-generated per service.
+services:
+  - type: web
+    name: virtual-office-hq
+    runtime: node
+    plan: free
+    branch: main
+    autoDeploy: true
+    # sqlite3 is pinned to ^5 in package.json so its prebuilt native binary
+    # loads on Render's GLIBC; node-pre-gyp falls back to a source build if
+    # needed. No extra build flags required.
+    buildCommand: npm install
+    startCommand: node server-only.js
+    healthCheckPath: /
+    envVars:
+      # Matches .node-version / package.json engines.
+      - key: NODE_VERSION
+        value: "20"
+      # Signs login tokens. Auto-generated and persisted per service so logins
+      # survive restarts (set this manually instead if prod & test must share).
+      - key: JWT_SECRET
+        generateValue: true
+      # Origins allowed to call the API / open a socket. Differs per service:
+      #   prod -> http://localhost:3000,https://virtual-office-hq.onrender.com
+      #   test -> http://localhost:3000,https://virtual-office-hq-test.onrender.com
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Optional: username granted the in-app Settings panel (e.g. Arjun).
+      - key: ADMIN_USERNAME
+        sync: false

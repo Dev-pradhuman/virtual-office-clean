@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Virtual Office</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Title bar for electron drag -->
+  <div id="titlebar">
+    <div class="title">Virtual Office</div>
+  </div>
+
+  <!-- Auth Screen -->
+  <div id="auth-screen" class="screen">
+    <div class="auth-container glass-panel">
+      <div class="auth-logo">
+        <div class="logo-icon">🏢</div>
+        <h2>Virtual Office</h2>
+      </div>
+      <form id="login-form">
+        <div class="input-group">
+          <label for="server-url">Headquarters Address</label>
+          <input type="text" id="server-url" value="https://virtual-office-hq-test.onrender.com" placeholder="e.g. https://your-hq.onrender.com">
+          <small class="field-hint">This must be the shared Render URL — the same for everyone. Don't use localhost (that's your own machine only).</small>
+        </div>
+        <div class="input-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" required placeholder="Arjun, Aviral, or Pradhuman">
+        </div>
+        <div class="input-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="Enter your password">
+        </div>
+        <button type="submit" class="btn primary">Enter Headquarters</button>
+        <div id="login-error" class="error-msg"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard Screen -->
+  <div id="dashboard-screen" class="screen hidden">
+    <!-- Full-bleed office backdrop; panels overlay it at 30% opacity. -->
+    <div id="office-3d" class="hidden"></div>
+    <img id="office-image" src="assets/office.png" alt="Team HQ office">
+
+    <!-- LEFT SIDEBAR -->
+    <aside id="sidebar" class="glass-panel">
+      <div class="brand">
+        <div class="brand-logo">🏢</div>
+        <div class="brand-text">
+          <h3>Team HQ</h3>
+          <span>Private Workspace</span>
+        </div>
+      </div>
+
+      <nav>
+        <button class="nav-item active" data-view="office"><span class="icon">🏠</span> Office</button>
+        <button class="nav-item" data-view="projects"><span class="icon">📊</span> Projects</button>
+        <button class="nav-item" data-view="tasks"><span class="icon">✅</span> Tasks</button>
+        <button class="nav-item" data-view="calendar"><span class="icon">📅</span> Calendar</button>
+        <button class="nav-item" data-view="whiteboard"><span class="icon">🖊️</span> Whiteboard</button>
+        <button class="nav-item" data-view="files"><span class="icon">📁</span> Files</button>
+        <button class="nav-item" data-view="integrations"><span class="icon">🧩</span> Integrations</button>
+        <button class="nav-item" data-view="edith"><span class="icon">🤖</span> Edith AI</button>
+        <button class="nav-item" data-view="settings" id="settings-nav"><span class="icon">⚙️</span> Settings</button>
+        <button class="nav-item hidden" data-view="analytics" id="analytics-nav"><span class="icon">📈</span> Analytics</button>
+      </nav>
+
+      <!-- Quick Actions -->
+      <div class="sidebar-quick">
+        <div class="sidebar-quick-title">Quick Actions</div>
+        <div class="quick-actions">
+          <button class="qa-btn primary" id="qa-meeting"><span>📞</span> Start Call</button>
+          <button class="qa-btn hidden" id="qa-join-call"><span>🟢</span> Join ongoing call</button>
+          <button class="qa-btn" id="qa-whiteboard"><span>🖊️</span> Whiteboard</button>
+          <button class="qa-btn" id="share-screen-btn"><span>🖥️</span> Share Screen</button>
+          <button class="qa-btn" id="qa-chat"><span>💬</span> Team Chat</button>
+          <button class="qa-btn" id="qa-project"><span>📂</span> Projects</button>
+        </div>
+      </div>
+
+      <!-- Quote -->
+      <div class="quote-card" style="margin-top: auto;">
+        <p>"Alone we can do so little; together we can do so much."</p>
+        <span>– Helen Keller</span>
+      </div>
+
+      <!-- Profile -->
+      <div class="profile-section">
+        <div class="profile-card" id="my-profile"><!-- populated via JS --></div>
+        <div class="profile-controls">
+          <button id="theme-btn" class="icon-btn" title="Appearance & theme">🎨</button>
+          <button class="icon-btn" title="Audio">🎧</button>
+          <button id="logout-btn" class="icon-btn" title="Sign out">🚪</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CENTER -->
+    <main id="main-content">
+      <!-- Office View -->
+      <section id="office-view" class="view active">
+        <div class="office-floor">
+          <div class="workstations-container hidden" id="workstations"></div>
+        </div>
+
+        <!-- Screen Share Container (grid of all active shares) -->
+        <div id="screenshare-container" class="hidden glass-panel">
+          <div class="screenshare-header">
+            <h3>Live Screens</h3>
+            <button id="close-screenshare-btn" class="icon-btn" title="Stop my screen share">❌</button>
+          </div>
+          <div id="screenshare-grid" class="screenshare-grid"></div>
+        </div>
+      </section>
+
+      <!-- Chat View -->
+      <section id="chat-view" class="view hidden">
+        <header class="view-header glass-panel"><h2 id="chat-title">Team Chat</h2></header>
+        <div class="chat-layout">
+          <div id="chat-convos" class="chat-convos glass-panel"></div>
+          <div class="chat-container glass-panel">
+            <div id="chat-messages" class="messages-area"></div>
+            <form id="chat-form" class="message-input-area">
+              <button type="button" id="chat-attach" class="icon-btn" title="Attach a file">📎</button>
+              <input type="text" id="chat-input" placeholder="Type a message… use @name to mention" autocomplete="off">
+              <button type="submit" class="icon-btn primary">➤</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- Edith Dedicated View -->
+      <section id="edith-view" class="view hidden">
+        <header class="view-header glass-panel"><h2>Edith AI Assistant</h2></header>
+        <div class="edith-view-container glass-panel">
+          <div class="edith-view-left">
+            <div class="edith-large-avatar">
+              <div class="avatar-ring"></div>
+              <div class="avatar-ring"></div>
+              <div class="avatar-face">🤖</div>
+            </div>
+            <h3 class="edith-view-title">Edith</h3>
+            <p class="edith-view-subtitle">Your Virtual Office Assistant</p>
+            
+            <div class="edith-view-soundwave">
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+              <div class="bar"></div>
+            </div>
+            <div class="edith-view-status">Ready. Speak or type below.</div>
+          </div>
+          
+          <div class="edith-view-right">
+            <div class="edith-view-chat-log" id="edith-view-chat-log">
+              <div class="edith-msg system">Hi! I'm Edith, your Virtual Office AI. Ask me to "summarize activity" to see what the team is currently up to, or ask other questions! You can use voice controls or type.</div>
+            </div>
+            
+            <div class="edith-view-suggestions">
+              <button class="edith-view-sug-chip" data-query="summarize activity">📊 Summarize Work</button>
+              <button class="edith-view-sug-chip" data-query="who is online">❓ Who is online?</button>
+              <button class="edith-view-sug-chip" data-query="what apps are open">🖥️ What apps are open?</button>
+            </div>
+            
+            <div class="edith-view-footer">
+              <input type="text" id="edith-view-input" placeholder="Ask Edith something..." autocomplete="off">
+              <button id="edith-view-mic-btn" title="Toggle voice recognition">🎤</button>
+              <button id="edith-view-send-btn">Send</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings View (accessible to all, admin fields gated) -->
+      <section id="settings-view" class="view hidden">
+        <header class="view-header glass-panel"><h2>Settings</h2></header>
+        <div class="settings-container glass-panel" style="max-height: calc(100vh - 120px); overflow-y: auto; padding-right: 10px;">
+          
+          <!-- USER SETTINGS -->
+          <div class="user-settings-section">
+            <h3>👤 Profile Settings</h3>
+            <p class="settings-hint">Update your display name, designation, avatar image, and password.</p>
+            
+            <div class="input-group" style="margin-top:12px;">
+              <label for="settings-profile-username">Username / Name</label>
+              <input type="text" id="settings-profile-username" placeholder="Enter username..." style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+            </div>
+
+            <div class="input-group" style="margin-top:12px;">
+              <label for="settings-profile-designation">Designation / Role</label>
+              <input type="text" id="settings-profile-designation" placeholder="e.g. Lead Developer, Product Designer..." style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+            </div>
+            <div class="input-group" style="margin-top:12px;">
+              <label for="settings-profile-avatar">Avatar Photo</label>
+              <div style="display:flex; gap:12px; align-items:center; margin-top:5px;">
+                <img id="settings-profile-avatar-preview" src="assets/default-avatar.png" alt="PFP Preview" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid var(--primary-color); background:rgba(0,0,0,0.3);">
+                <div style="flex:1; display:flex; flex-direction:column; gap:6px;">
+                  <input type="text" id="settings-profile-avatar" placeholder="Or paste image URL / Base64..." style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff; font-size: 13px;">
+                  <div style="display:flex; gap:8px;">
+                    <button type="button" id="settings-profile-avatar-upload-btn" class="btn outline" style="width:auto; padding: 6px 12px; font-size:12px; display:flex; align-items:center; gap:6px;">📁 Upload local image</button>
+                    <input type="file" id="settings-profile-avatar-file" accept="image/*" style="display:none;">
+                    <span id="settings-avatar-file-name" style="font-size:11px; color:var(--text-muted); align-self:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px;">No file selected</span>
+                  </div>
+                </div>
+              </div>
+            </div>            <div class="input-group" style="margin-top:12px;">
+              <label for="settings-profile-password">New Password (leave empty to keep current)</label>
+              <input type="password" id="settings-profile-password" placeholder="Enter new password..." style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+            </div>
+
+            <div style="margin-top:15px;">
+              <button id="settings-save-profile-btn" class="btn primary" style="width:auto;">Update Profile Info</button>
+            </div>
+          </div>
+
+          <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+          <div class="user-settings-section">
+            <h3>🎨 Appearance</h3>
+            <p class="settings-hint">Customize theme mode and accent colors for your workspace.</p>
+            <div class="input-group">
+              <label for="settings-theme-mode">Appearance Mode</label>
+              <select id="settings-theme-mode" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+                <option value="dark">Dark Mode</option>
+                <option value="light">Light Mode</option>
+                <option value="auto">System Default (Auto)</option>
+              </select>
+            </div>
+            <div class="input-group" style="display:flex; flex-direction:row; align-items:center; gap:10px; margin-top:10px;">
+              <input type="checkbox" id="settings-theme-3d" style="width:auto;">
+              <label for="settings-theme-3d" style="font-size:14px; user-select:none;">Enable 3D Office Scene (WebGL)</label>
+            </div>
+            <div class="input-group" style="margin-top: 15px;">
+              <label>Accent Theme Color</label>
+              <div id="theme-grid" class="theme-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 5px;"></div>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>🔊 Audio Settings</h3>
+            <p class="settings-hint">Select input/output audio channels and configure volume parameters.</p>
+            <div class="input-group">
+              <label for="settings-audio-input">Microphone (Input)</label>
+              <select id="settings-audio-input" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;"></select>
+            </div>
+            <div class="input-group">
+              <label for="settings-audio-output">Speaker (Output)</label>
+              <select id="settings-audio-output" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;"></select>
+            </div>
+            <div class="input-group">
+              <label for="settings-audio-volume">Output Volume (<span id="audio-volume-val">100%</span>)</label>
+              <input type="range" id="settings-audio-volume" min="0" max="100" value="100" style="width:100%; background:rgba(255,255,255,0.1); accent-color:var(--primary-color);">
+            </div>
+            <div class="input-group" style="display:flex; flex-direction:row; align-items:center; gap:10px; margin-top:10px;">
+              <input type="checkbox" id="settings-audio-noise" checked style="width:auto;">
+              <label for="settings-audio-noise" style="font-size:14px; user-select:none;">Enable Noise Suppression & Echo Cancellation</label>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>📹 Video Settings</h3>
+            <p class="settings-hint">Select camera device, set video resolutions, and toggle virtual background effects.</p>
+            <div class="input-group">
+              <label for="settings-video-input">Camera (Input)</label>
+              <select id="settings-video-input" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;"></select>
+            </div>
+            <div class="input-group">
+              <label for="settings-video-quality">Video Streaming Quality</label>
+              <select id="settings-video-quality" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+                <option value="low">Low (360p - Saves bandwidth)</option>
+                <option value="medium" selected>Medium (480p - Balanced)</option>
+                <option value="high">High (720p - Sharp)</option>
+                <option value="ultra">Ultra (1080p - Full HD)</option>
+              </select>
+            </div>
+            <div class="input-group" style="display:flex; flex-direction:row; align-items:center; gap:10px; margin-top:10px;">
+              <input type="checkbox" id="settings-video-blur" style="width:auto;">
+              <label for="settings-video-blur" style="font-size:14px; user-select:none;">Enable Camera Background Blur (AI)</label>
+            </div>
+            <div class="input-group" style="margin-top: 15px;">
+              <label>Camera Live Preview</label>
+              <div style="width:100%; max-width: 320px; aspect-ratio: 16/9; background:#000; border-radius: 8px; overflow:hidden; border:1px solid rgba(255,255,255,0.1); position:relative;">
+                <video id="settings-video-preview" autoplay muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+                <div id="settings-video-preview-placeholder" style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:0.85em; opacity:0.6;">Camera is off</div>
+              </div>
+              <button type="button" id="settings-toggle-preview-btn" class="btn outline" style="width:auto; margin-top:8px;">📷 Toggle Camera Preview</button>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>🔔 Notification Settings</h3>
+            <p class="settings-hint">Select the categories of pop-up alert notifications you wish to receive.</p>
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="settings-notif-mentions" checked style="width:auto;">
+                <label for="settings-notif-mentions" style="font-size:14px; user-select:none;">Mentions & Announcements (@here / @username)</label>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="settings-notif-tasks" checked style="width:auto;">
+                <label for="settings-notif-tasks" style="font-size:14px; user-select:none;">Task Assignments & Updates</label>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="settings-notif-activity" checked style="width:auto;">
+                <label for="settings-notif-activity" style="font-size:14px; user-select:none;">Room Activity (Users Joining/Leaving)</label>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px; margin-top: 5px;">
+                <input type="checkbox" id="settings-notif-sounds" checked style="width:auto;">
+                <label for="settings-notif-sounds" style="font-size:14px; user-select:none;">Play Notification Alert Sound</label>
+              </div>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>💻 Application Settings</h3>
+            <p class="settings-hint">Configure app startup behavior, tray integration, and language preferences.</p>
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="settings-app-tray" checked style="width:auto;">
+                <label for="settings-app-tray" style="font-size:14px; user-select:none;">Minimize to Tray on Close (X button / Alt+F4)</label>
+              </div>
+            </div>
+            <div class="input-group" style="margin-top: 15px;">
+              <label for="settings-app-language">Language (Future Ready)</label>
+              <select id="settings-app-language" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+                <option value="en" selected>English</option>
+                <option value="es">Español</option>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+                <option value="hi">हिन्दी (Hindi)</option>
+              </select>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>⚡ Performance Settings</h3>
+            <p class="settings-hint">Manage system resource usage, rendering optimizations, and hardware acceleration.</p>
+            <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="settings-perf-resources" style="width:auto;">
+                <label for="settings-perf-resources" style="font-size:14px; user-select:none;">Resource-Saving Mode (reduces frame rates and throttle intervals)</label>
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="settings-perf-hardware" checked style="width:auto;">
+                <label for="settings-perf-hardware" style="font-size:14px; user-select:none;">GPU Hardware Acceleration (requires restart)</label>
+              </div>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>🖱️ Remote Control Support</h3>
+            <p class="settings-hint">Allows team members to control your screen when you explicitly grant permission.</p>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px; border-radius: 8px; margin-top: 10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Native Input Injection:</span>
+                <span id="settings-control-status" style="font-weight:bold; color:var(--busy-color);">Checking...</span>
+              </div>
+              <p id="settings-control-desc" class="settings-hint" style="margin-top:6px; font-size:12px; display:none; color:var(--away-color);">
+                Warning: <code>@nut-tree-fork/nut-js</code> is not installed or failed to compile on this machine. Teammates will not be able to control your screen. Run <code>npm install @nut-tree-fork/nut-js</code>.
+              </p>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>☕ Support & Tips</h3>
+            <p class="settings-hint">Support the developer with a small tip or buy a coffee!</p>
+            <div style="margin-top: 10px; display: inline-block;">
+              <a href="https://ko-fi.com/Z6M322N8OR" target="_blank" style="display: inline-block; transition: opacity 0.2s;">
+                <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" style="height: 36px; border-radius: 6px;">
+              </a>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+
+            <h3>ℹ️ About</h3>
+            <p class="settings-hint">System and release metadata for troubleshooting.</p>
+            <div style="margin: 15px 0; font-size: 0.9em; opacity: 0.95; display:flex; flex-direction:column; gap:6px;">
+              <div style="display:flex; justify-content:space-between;">
+                <span>Application Version:</span> <strong style="color:var(--primary-color);">1.0.0</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Build Number:</span> <strong>2026.07.02.1</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Active Release Channel:</span> <span id="settings-about-channel">Stable</span>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span>Process Architecture:</span> <span>x64</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ADMIN SETTINGS CONTAINER -->
+          <div id="admin-settings-section" class="hidden">
+            <hr style="margin: 28px 0; border: none; border-top: 2px dashed rgba(255, 255, 255, 0.12);">
+            <div style="background: rgba(99, 102, 241, 0.04); border: 1px solid rgba(99, 102, 241, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+              <h3 style="color:var(--primary-color); display:flex; align-items:center; gap:8px;">🛠️ Admin Configuration</h3>
+              <p class="settings-hint" style="margin-bottom:0;">These settings are managed globally by system administrators and stored on the server.</p>
+            </div>
+
+            <h3>Google Drive (file uploads)</h3>
+            <p class="settings-hint">Configure the team's Google Drive here so everyone can upload files. These keys are stored on the server, never on members' machines. To get a refresh token, run <code>node auth_setup.js</code> once and paste the result below.</p>
+            <div class="input-group">
+              <label for="g-client-id">Client ID</label>
+              <input type="text" id="g-client-id" placeholder="xxxxx.apps.googleusercontent.com" autocomplete="off">
+            </div>
+            <div class="input-group">
+              <label for="g-client-secret">Client Secret <span id="g-secret-set" class="settings-badge hidden">saved</span></label>
+              <input type="password" id="g-client-secret" placeholder="Leave blank to keep current" autocomplete="off">
+            </div>
+            <div class="input-group">
+              <label for="g-refresh-token">Refresh Token <span id="g-token-set" class="settings-badge hidden">saved</span></label>
+              <input type="password" id="g-refresh-token" placeholder="Leave blank to keep current" autocomplete="off">
+            </div>
+            <div class="input-group">
+              <label for="g-folder-id">Drive Folder ID</label>
+              <input type="text" id="g-folder-id" placeholder="The ID of the target Drive folder" autocomplete="off">
+            </div>
+            
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+            
+            <h3>🚪 Exit Security</h3>
+            <p class="settings-hint">Configure the security password required to quit the desktop application on workstations. Users cannot close the app without this password.</p>
+            <div class="input-group">
+              <label for="settings-quit-pass">New Exit Password <span id="settings-quit-pass-set" class="settings-badge hidden">configured</span></label>
+              <input type="password" id="settings-quit-pass" placeholder="Enter new exit password (leave blank to keep current)" autocomplete="off">
+            </div>
+            
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+            
+            <h3>✨ Software Updates (Global)</h3>
+            <p class="settings-hint">Configure release channels and manually check for software updates.</p>
+            <div class="input-group">
+              <label for="settings-update-channel">Update Release Channel</label>
+              <select id="settings-update-channel" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #fff;">
+                <option value="stable">Stable (Recommended)</option>
+                <option value="beta">Beta (Pre-release testing)</option>
+                <option value="dev">Development (Bleeding edge)</option>
+              </select>
+            </div>
+            <div class="input-group" style="margin-top: 15px; display: flex; align-items: center; gap: 10px;">
+              <button type="button" id="settings-check-update-btn" class="btn outline" style="width: auto;">🔍 Check Now</button>
+              <span id="settings-update-check-status" style="font-size: 0.85em; opacity: 0.8;"></span>
+            </div>
+
+            <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+            
+            <h3>📋 Presence Audit Log</h3>
+            <p class="settings-hint">Real-time audit log of launches, normal shutdowns, crashes, and network disconnections.</p>
+            <div style="max-height: 250px; overflow-y: auto; background: rgba(0,0,0,0.25); border-radius: 6px; border: 1px solid rgba(255,255,255,0.06); margin-bottom: 15px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.8em; text-align: left;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2);">
+                    <th style="padding: 8px 10px;">Time</th>
+                    <th style="padding: 8px 10px;">User</th>
+                    <th style="padding: 8px 10px;">Event</th>
+                    <th style="padding: 8px 10px;">Reason</th>
+                    <th style="padding: 8px 10px;">Device / Ver</th>
+                  </tr>
+                </thead>
+                <tbody id="settings-audit-log-body">
+                  <tr>
+                    <td colspan="5" style="padding: 20px; text-align: center; opacity: 0.6;">Loading audit logs...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-bottom: 15px;">
+              <button type="button" id="settings-refresh-audit-btn" class="btn outline" style="width: auto;">🔄 Refresh Logs</button>
+            </div>
+          </div>
+
+          <div class="settings-actions" style="margin-top:25px;">
+            <button id="settings-save" class="btn primary" style="width:auto; min-width:150px;">Save All Settings</button>
+            <button id="settings-test" class="btn outline" style="width:auto;">Test Connection</button>
+          </div>
+          <div id="settings-status" class="settings-status"></div>
+        </div>
+      </section>
+
+      <!-- Files View -->
+      <section id="files-view" class="view hidden" style="display:flex; flex-direction:column; height:calc(100vh - 120px); overflow:hidden;">
+        <header class="view-header glass-panel" style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Shared Files</h2>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <input type="text" id="files-search" placeholder="Search shared files..." style="padding: 8px 12px; max-width:250px;">
+            <button id="upload-btn" class="btn primary" style="width:auto;">Upload File</button>
+            <input type="file" id="file-input" class="hidden" multiple>
+          </div>
+        </header>
+        
+        <!-- Files Container (Drag & Drop Zone) -->
+        <div id="files-dropzone" class="files-container glass-panel" style="flex:1; margin-top:12px; display:flex; flex-direction:column; overflow:hidden; position:relative; transition: all 0.2s ease;">
+          <div id="drag-overlay" class="hidden" style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(99,102,241,0.12); border: 2px dashed var(--primary-color); border-radius: 20px; display:flex; justify-content:center; align-items:center; z-index:10; pointer-events:none;">
+            <div style="text-align:center; font-weight:bold; color:var(--primary-color);">📂 Drop files here to upload to Team HQ</div>
+          </div>
+          
+          <div id="files-grid" class="files-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap:15px; padding:15px; overflow-y:auto; flex:1; align-content:start;"></div>
+          
+          <!-- Transfer Queue Widget (Collapsible) -->
+          <div id="transfer-queue-panel" class="glass-panel" style="margin: 15px; padding: 12px; max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.3); border-top:1px solid rgba(255,255,255,0.08); display:none;">
+            <h4 style="font-size:0.9em; margin-bottom:8px; display:flex; justify-content:space-between;">
+              <span>Transfers Queue ⏳</span>
+              <button id="queue-clear-btn" class="btn outline" style="padding:2px 6px; font-size:10px; width:auto;">Clear Completed</button>
+            </h4>
+            <div id="queue-items" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Analytics View (Admin Only) -->
+      <section id="analytics-view" class="view hidden" style="display:flex; flex-direction:column; height:calc(100vh - 120px); overflow:hidden;">
+        <header class="view-header glass-panel" style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Admin Analytics Dashboard 📈</h2>
+          <span class="badge" id="analytics-active-count" style="font-size: 13px; padding: 6px 12px; background: rgba(16,185,129,0.2); color:#10b981; border: 1px solid rgba(16,185,129,0.3);">0 Users Connected</span>
+        </header>
+
+        <div style="flex:1; display:grid; grid-template-columns: 2fr 1fr; gap:15px; margin-top:12px; overflow:hidden;">
+          
+          <!-- Left side: Live telemetry grid -->
+          <div class="glass-panel" style="display:flex; flex-direction:column; overflow:hidden; padding:15px;">
+            <h3 style="margin-bottom:12px;">Active Workstation Status</h3>
+            <div style="flex:1; overflow-y:auto;">
+              <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9em;">
+                <thead>
+                  <tr style="border-bottom:1px solid rgba(255,255,255,0.1); opacity:0.8;">
+                    <th style="padding:10px 5px;">User</th>
+                    <th style="padding:10px 5px;">Location</th>
+                    <th style="padding:10px 5px;">Status/Idle</th>
+                    <th style="padding:10px 5px;">OS / App</th>
+                    <th style="padding:10px 5px;">CPU / RAM</th>
+                    <th style="padding:10px 5px;">Ping</th>
+                  </tr>
+                </thead>
+                <tbody id="analytics-telemetry-rows">
+                  <tr>
+                    <td colspan="6" style="padding:20px; text-align:center; opacity:0.6;">Loading telemetry...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Right side: Connection Logs & System Health Warnings -->
+          <div class="glass-panel" style="display:flex; flex-direction:column; overflow:hidden; padding:15px;">
+            <h3 style="margin-bottom:12px;">System Event Logs</h3>
+            <div id="analytics-log-container" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; font-size:0.85em; padding-right:5px;">
+              <div style="opacity:0.6; text-align:center; padding-top:20px;">No logs recorded yet.</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Tasks View (Kanban Board) -->
+      <section id="tasks-view" class="view hidden">
+        <header class="view-header glass-panel" style="display:flex; justify-content:space-between; align-items:center;">
+          <h2>Tasks Board</h2>
+          <button id="tasks-new-btn" class="btn primary" style="width:auto;">➕ New Task</button>
+        </header>
+        
+        <!-- Filter and Search controls -->
+        <div class="kanban-filters glass-panel" style="margin: 12px 0; padding: 12px; display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+          <div style="flex:1; min-width: 200px;">
+            <input type="text" id="tasks-search" placeholder="Search tasks..." style="width:100%; padding: 8px 12px;">
+          </div>
+          <div>
+            <select id="tasks-filter-priority" style="padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color:#fff;">
+              <option value="">All Priorities</option>
+              <option value="Low">Low Priority</option>
+              <option value="Medium">Medium Priority</option>
+              <option value="High">High Priority</option>
+            </select>
+          </div>
+          <div>
+            <select id="tasks-filter-project" style="padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color:#fff;">
+              <option value="">All Projects</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Kanban Columns -->
+        <div class="kanban-board" style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 15px; flex:1; height: calc(100vh - 230px); overflow: hidden;">
+          
+          <!-- TO DO -->
+          <div class="kanban-col glass-panel" style="display:flex; flex-direction:column; background:rgba(255,255,255,0.02); overflow:hidden;">
+            <div class="kanban-col-header" style="padding: 12px; border-bottom:1px solid rgba(255,255,255,0.08); font-weight:bold; display:flex; justify-content:space-between;">
+              <span>To Do 🎯</span>
+              <span id="count-todo" class="badge">0</span>
+            </div>
+            <div id="col-todo" class="kanban-cards-container" data-status="todo" style="flex:1; padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+
+          <!-- IN PROGRESS -->
+          <div class="kanban-col glass-panel" style="display:flex; flex-direction:column; background:rgba(255,255,255,0.02); overflow:hidden;">
+            <div class="kanban-col-header" style="padding: 12px; border-bottom:1px solid rgba(255,255,255,0.08); font-weight:bold; display:flex; justify-content:space-between;">
+              <span>In Progress ⚡</span>
+              <span id="count-inprogress" class="badge">0</span>
+            </div>
+            <div id="col-in_progress" class="kanban-cards-container" data-status="in_progress" style="flex:1; padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+
+          <!-- REVIEW -->
+          <div class="kanban-col glass-panel" style="display:flex; flex-direction:column; background:rgba(255,255,255,0.02); overflow:hidden;">
+            <div class="kanban-col-header" style="padding: 12px; border-bottom:1px solid rgba(255,255,255,0.08); font-weight:bold; display:flex; justify-content:space-between;">
+              <span>Review 🔍</span>
+              <span id="count-review" class="badge">0</span>
+            </div>
+            <div id="col-review" class="kanban-cards-container" data-status="review" style="flex:1; padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+
+          <!-- COMPLETED -->
+          <div class="kanban-col glass-panel" style="display:flex; flex-direction:column; background:rgba(255,255,255,0.02); overflow:hidden;">
+            <div class="kanban-col-header" style="padding: 12px; border-bottom:1px solid rgba(255,255,255,0.08); font-weight:bold; display:flex; justify-content:space-between;">
+              <span>Completed ✅</span>
+              <span id="count-completed" class="badge">0</span>
+            </div>
+            <div id="col-completed" class="kanban-cards-container" data-status="completed" style="flex:1; padding:10px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;"></div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Projects -->
+      <section id="projects-view" class="view hidden">
+        <header class="view-header glass-panel"><h2>Projects</h2></header>
+        <div class="feature-two-column">
+          <div class="feature-form-panel glass-panel">
+            <h3 class="panel-subtitle">✨ Create Project</h3>
+            <p class="panel-hint">Start a new project thread to organize tasks and collaborate with teammates.</p>
+            <form id="project-form" class="vertical-form">
+              <div class="input-group">
+                <label for="project-name">Project Name</label>
+                <input type="text" id="project-name" placeholder="e.g. Mobile App Redesign" autocomplete="off" required>
+              </div>
+              <div class="input-group">
+                <label for="project-desc">Description</label>
+                <textarea id="project-desc" placeholder="Provide a short description of the goals..." autocomplete="off" rows="3"></textarea>
+              </div>
+              <button class="btn primary" type="submit">Create Project</button>
+            </form>
+          </div>
+          <div class="feature-list-panel glass-panel">
+            <h3 class="panel-subtitle">📂 Active Projects</h3>
+            <div id="project-list" class="card-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Calendar -->
+      <section id="calendar-view" class="view hidden">
+        <header class="view-header glass-panel"><h2>Calendar</h2></header>
+        <div class="feature-two-column">
+          <div class="feature-form-panel glass-panel">
+            <h3 class="panel-subtitle">📅 Schedule Event</h3>
+            <p class="panel-hint">Schedule meetings, deadlines, or office social hours for the team.</p>
+            <form id="event-form" class="vertical-form">
+              <div class="input-group">
+                <label for="event-title">Event Title</label>
+                <input type="text" id="event-title" placeholder="e.g. Design Review Meeting" autocomplete="off" required>
+              </div>
+              <div class="input-group">
+                <label for="event-date">Date</label>
+                <input type="date" id="event-date" required>
+              </div>
+              <div class="input-group">
+                <label for="event-time">Time</label>
+                <input type="time" id="event-time">
+              </div>
+              <button class="btn primary" type="submit">Schedule Event</button>
+            </form>
+          </div>
+          <div class="feature-list-panel glass-panel">
+            <h3 class="panel-subtitle">Upcoming Events</h3>
+            <div id="event-list" class="event-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Whiteboard -->
+      <section id="whiteboard-view" class="view hidden">
+        <header class="view-header glass-panel">
+          <h2>Whiteboard</h2>
+          <div class="wb-tools">
+            <button id="wb-mode" class="btn outline" title="Toggle between the shared team board and your private board">🌐 Shared</button>
+            <div id="wb-swatches" class="wb-swatches" title="Quick colors"></div>
+            <input type="color" id="wb-color" value="#6366f1" title="Custom color">
+            <button id="wb-eraser" class="btn outline" title="Eraser">🧽</button>
+            <input type="range" id="wb-size" min="1" max="24" value="4" title="Brush size">
+            <button id="wb-clear" class="btn outline">Clear</button>
+          </div>
+        </header>
+        <div class="wb-canvas-wrap glass-panel">
+          <canvas id="wb-canvas"></canvas>
+        </div>
+      </section>
+
+      <!-- Integrations -->
+      <section id="integrations-view" class="view hidden">
+        <header class="view-header glass-panel"><h2>Integrations</h2></header>
+        <div class="feature-container glass-panel">
+          <div class="card-grid">
+            <div class="integration-card"><div class="cs-icon">📁</div><h3>Google Drive</h3><p id="int-drive">Checking…</p></div>
+            <div class="integration-card"><div class="cs-icon">🐙</div><h3>GitHub</h3><p>Commit feed — coming soon</p></div>
+            <div class="integration-card"><div class="cs-icon">💬</div><h3>Discord</h3><p>Notifications — coming soon</p></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- RIGHT SIDEBAR -->
+    <aside id="right-panel">
+      <div class="panel-section glass-panel">
+        <div class="panel-header"><h3>Team Members</h3></div>
+        <div id="team-members" class="team-list"></div>
+      </div>
+
+      <div class="panel-section glass-panel feed-section">
+        <div class="panel-header"><h3>Activity Feed</h3></div>
+        <div id="activity-feed" class="feed-list"></div>
+      </div>
+    </aside>
+
+    <!-- BOTTOM STATUS BAR -->
+    <footer id="status-bar" class="glass-panel">
+      <div class="status-left">
+        <span class="status-item"><span class="dot online"></span> You are in the office</span>
+        <span class="status-item"><span class="bars">📶</span> Voice Connected</span>
+      </div>
+      <div class="status-right">
+        <span class="status-item">☁️ <span id="weather">24°C</span></span>
+        <span class="status-item" id="server-status"><span class="dot online"></span> Server online</span>
+        <span class="status-item" id="clock">--:--</span>
+      </div>
+    </footer>
+
+    <!-- EDITH AI ASSISTANT -->
+    <div id="edith-bubble" title="Talk to Edith (AI Assistant)">
+      <div class="edith-avatar-glow"></div>
+      <span class="edith-icon">🎙️</span>
+    </div>
+
+    <div id="edith-panel" class="glass-panel hidden">
+      <div class="edith-header">
+        <h3>🤖 Edith - Team Assistant</h3>
+        <button id="edith-close" class="close-btn" style="background:transparent; border:none; color:white; font-size:20px; cursor:pointer;">&times;</button>
+      </div>
+      <div class="edith-body">
+        <div class="edith-soundwave">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <div class="edith-status">Ready. Click 🎤 to speak, or type below.</div>
+        
+        <div class="edith-chat-log" id="edith-chat-log">
+          <div class="edith-msg system">Hi! I'm Edith, your Virtual Office AI. Ask me to "summarize activity" to see what the team is currently up to, or ask other questions!</div>
+        </div>
+        
+        <div class="edith-suggestions" style="margin-top: auto;">
+          <button class="edith-sug-chip" data-query="summarize activity">📊 Summarize Work</button>
+          <button class="edith-sug-chip" data-query="who is online">❓ Who is online?</button>
+          <button class="edith-sug-chip" data-query="what apps are open">🖥️ What apps are open?</button>
+        </div>
+      </div>
+      <div class="edith-footer">
+        <input type="text" id="edith-input" placeholder="Type a message..." autocomplete="off">
+        <button id="edith-mic-btn" title="Toggle voice recognition">🎤</button>
+        <button id="edith-send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile / Change Password Modal -->
+  <div id="profile-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel">
+      <h3>Profile</h3>
+      <p id="profile-username" class="settings-hint"></p>
+
+      <div class="status-box">
+        <label class="status-box-label">Your status</label>
+        <div class="status-options">
+          <button type="button" class="status-opt" data-status="online">🟢 Online</button>
+          <button type="button" class="status-opt" data-status="away">🌙 Away</button>
+          <button type="button" class="status-opt" data-status="busy">⛔ Busy</button>
+        </div>
+        <div class="status-msg-row">
+          <input type="text" id="status-message" maxlength="60" placeholder="What's on your mind? (optional)" autocomplete="off">
+          <button type="button" id="status-save" class="btn primary">Set</button>
+        </div>
+        <div class="settings-hint" style="margin:6px 0 0">Auto-set to Away after a few minutes idle.</div>
+      </div>
+
+      <form id="change-password-form">
+        <div class="input-group">
+          <label for="cur-pass">Current Password</label>
+          <input type="password" id="cur-pass" autocomplete="off" required placeholder="Your current password">
+        </div>
+        <div class="input-group">
+          <label for="new-pass">New Password</label>
+          <input type="password" id="new-pass" autocomplete="off" required placeholder="At least 6 characters">
+        </div>
+        <div class="input-group">
+          <label for="confirm-pass">Confirm New Password</label>
+          <input type="password" id="confirm-pass" autocomplete="off" required placeholder="Re-enter new password">
+        </div>
+        <div id="profile-status" class="settings-status"></div>
+        <div class="modal-actions">
+          <button type="submit" class="btn primary">Change Password</button>
+          <button type="button" id="profile-close" class="btn outline">Close</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Remote Control Permission Modal -->
+  <div id="control-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel">
+      <h3>Remote Control Request</h3>
+      <p id="control-modal-message">Someone wants to control your screen.</p>
+      <div class="modal-actions">
+        <button id="control-allow" class="btn primary">Allow</button>
+        <button id="control-deny" class="btn outline">Deny</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- "Being controlled" banner (shown on the sharer's side) -->
+  <div id="control-banner" class="hidden">
+    <span id="control-banner-text">Someone is controlling your screen</span>
+    <button id="control-stop" class="btn outline">Stop</button>
+  </div>
+
+  <!-- Source Picker Modal -->
+  <div id="source-picker-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel source-picker-container">
+      <h3>Select Screen or Window</h3>
+      <div id="sources-list" class="sources-grid">
+        <!-- Sources populated via JS -->
+      </div>
+      <div class="modal-actions">
+        <button id="cancel-picker" class="btn outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice / Video Call panel -->
+  <div id="call-panel" class="hidden glass-panel">
+    <div class="call-head">
+      <h3>🔊 Call</h3>
+      <span class="call-hint">Anyone in the office can join</span>
+    </div>
+    <div id="call-grid" class="call-grid"></div>
+
+    <!-- Device settings (mic / camera / speaker) -->
+    <div id="call-device-panel" class="call-device-panel hidden">
+      <label>🎙️ Microphone <select id="dev-mic"></select></label>
+      <label>📷 Camera <select id="dev-cam"></select></label>
+      <label>🔊 Speaker <select id="dev-spk"></select></label>
+    </div>
+
+    <div class="call-controls">
+      <button id="call-mic" class="btn outline">🎙️ Mute</button>
+      <button id="call-cam" class="btn outline">📹 Start Video</button>
+      <button id="call-devices" class="btn outline" title="Audio/video devices">⚙️</button>
+      <button id="call-invite" class="btn outline" title="Ring someone again">➕ Invite</button>
+      <button id="call-leave" class="btn danger">📞 Leave</button>
+    </div>
+  </div>
+
+  <!-- Start-call modal: pick who to ring -->
+  <div id="call-start-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel call-start">
+      <h3>Start a Call</h3>
+      <label class="call-row"><input type="checkbox" id="call-select-all" checked> Select everyone online</label>
+      <div id="call-member-list" class="call-member-list"></div>
+      <label class="call-row"><input type="checkbox" id="call-cam-start"> Join with my camera on</label>
+      <div class="modal-actions">
+        <button id="call-start-btn" class="btn primary">Start Call</button>
+        <button id="call-start-cancel" class="btn outline">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incoming-call modal -->
+  <div id="call-incoming-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel">
+      <h3>📞 Incoming Call</h3>
+      <p id="call-incoming-text">Someone is calling…</p>
+      <div class="modal-actions">
+        <button id="call-incoming-join" class="btn primary">Join</button>
+        <button id="call-incoming-decline" class="btn outline">Decline</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User profile modal (click a teammate) -->
+  <div id="user-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel user-card">
+      <div class="user-card-head">
+        <div class="user-card-avatar">
+          <img id="user-card-img" alt="Avatar">
+          <span id="user-card-dot" class="t-dot"></span>
+        </div>
+        <div>
+          <h3 id="user-card-name">User</h3>
+          <div id="user-card-state" class="user-card-state">Offline</div>
+        </div>
+      </div>
+      <div class="user-card-activity">
+        <span class="uca-label">Currently working on</span>
+        <div id="user-card-activity" class="uca-value">—</div>
+      </div>
+      <div class="user-card-activity">
+        <span class="uca-label">Apps open</span>
+        <div id="user-card-apps" class="uca-apps">—</div>
+      </div>
+      <div class="user-card-activity">
+        <span class="uca-label">Time online</span>
+        <div class="uca-time">
+          <div class="uca-time-cell"><span id="uo-day" class="uo-val">—</span><span class="uo-lbl">today</span></div>
+          <div class="uca-time-cell"><span id="uo-week" class="uo-val">—</span><span class="uo-lbl">7 days</span></div>
+          <div class="uca-time-cell"><span id="uo-month" class="uo-val">—</span><span class="uo-lbl">30 days</span></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="user-card-call" class="btn primary">📞 Call</button>
+        <button id="user-card-dm" class="btn outline">💬 Message</button>
+        <button id="user-card-close" class="btn outline">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Appearance / theme modal -->
+  <div id="theme-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel">
+      <h3>🎨 Appearance</h3>
+      <p class="settings-hint">Pick a color theme. Your choice is saved on this device.</p>
+      <div id="theme-grid" class="theme-grid"></div>
+
+      <div class="backdrop-box">
+        <label class="status-box-label">Office backdrop (shared)</label>
+        <p class="settings-hint" style="margin:6px 0 10px">Change the center image everyone sees.</p>
+        <div class="backdrop-actions">
+          <button type="button" id="backdrop-change" class="btn primary">Upload image</button>
+          <button type="button" id="backdrop-reset" class="btn outline">Reset to default</button>
+        </div>
+        <button type="button" id="autobg-open" class="btn outline" style="width:auto;margin-top:10px">🔄 Auto-switch by who's online…</button>
+        <div id="backdrop-status" class="settings-status"></div>
+        <input type="file" id="backdrop-input" accept="image/*" class="hidden">
+      </div>
+
+      <div class="modal-actions">
+        <button id="theme-close" class="btn outline">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auto-backdrop: assign an image to each "who's online" combination -->
+  <div id="autobg-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel autobg-card">
+      <h3>🔄 Auto Backdrop</h3>
+      <p class="settings-hint">Assign an image to each combination of who's online. The center image switches automatically as people come and go. Empty combos fall back to the default backdrop.</p>
+      <div id="autobg-list" class="autobg-list"></div>
+      <div class="modal-actions">
+        <button id="autobg-close" class="btn outline">Done</button>
+      </div>
+    </div>
+    <input type="file" id="autobg-input" accept="image/*" class="hidden">
+  </div>
+
+  <!-- Exit Application Password Modal -->
+  <div id="quit-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel">
+      <h3>🚪 Exit Application</h3>
+      <p class="settings-hint">A security password is required to exit and shut down the Virtual Office.</p>
+      <form id="quit-form">
+        <div class="input-group">
+          <label for="quit-pass">Security Password</label>
+          <input type="password" id="quit-pass" required placeholder="Enter security password">
+        </div>
+        <div id="quit-status" class="settings-status"></div>
+        <div class="modal-actions">
+          <button type="submit" class="btn primary">Exit App</button>
+          <button type="button" id="quit-close" class="btn outline">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Automatic Updater Modal -->
+  <div id="update-modal" class="hidden modal-overlay">
+    <div class="modal glass-panel" style="max-width: 480px;">
+      <h3 style="display:flex;align-items:center;gap:10px">✨ Software Update <span id="update-badge" class="settings-badge">Available</span></h3>
+      
+      <!-- Screen 1: Update Available Details -->
+      <div id="update-screen-info">
+        <div style="margin: 15px 0; font-size: 0.9em; opacity: 0.9;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span>Current Version:</span> <strong id="update-current-ver">1.0.0</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span>New Version:</span> <strong id="update-new-ver" style="color:var(--primary-color,#00ffff)">1.0.1</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span>Release Date:</span> <span id="update-date">—</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span>Download Size:</span> <span id="update-size">—</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 15px;">
+          <h4 style="margin-bottom: 5px; font-size: 0.95em;">Release Notes:</h4>
+          <div id="update-notes" style="background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; font-size: 0.85em; max-height: 120px; overflow-y: auto; white-space: pre-wrap; border: 1px solid rgba(255,255,255,0.05);">
+            No release notes.
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top:20px">
+          <button id="update-download-btn" class="btn primary">Download Now</button>
+          <button id="update-later-btn" class="btn outline">Remind Me Later</button>
+        </div>
+      </div>
+
+      <!-- Screen 2: Download Progress -->
+      <div id="update-screen-progress" class="hidden">
+        <p style="font-size:0.9em;margin-bottom:10px">Downloading update in background...</p>
+        <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+          <div id="update-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #00c6ff, #0072ff); transition: width 0.2s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.8em;opacity:0.8;margin-bottom:15px">
+          <span id="update-speed">Speed: 0 KB/s</span>
+          <span id="update-percent">0%</span>
+        </div>
+        <p style="font-size:0.8em;opacity:0.7;text-align:center">You can continue working. The download will continue in the background.</p>
+      </div>
+
+      <!-- Screen 3: Ready to Install -->
+      <div id="update-screen-ready" class="hidden">
+        <p style="font-size:0.95em;margin-bottom:15px">The update has been downloaded successfully and is ready to install.</p>
+        <p style="font-size:0.85em;opacity:0.8;margin-bottom:20px">The application needs to restart to apply the update. Save any unsaved work before proceeding.</p>
+        <div class="modal-actions">
+          <button id="update-restart-btn" class="btn primary">Restart & Install</button>
+          <button id="update-install-later-btn" class="btn outline">Install on Exit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kanban Task Create/Edit Modal -->
+  <div id="task-modal" class="modal-overlay hidden">
+    <div class="modal glass-panel" style="max-width: 600px; width: 100%; display: flex; flex-direction: column; max-height: 85vh; overflow-y: auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+        <h3 id="task-modal-title-text">Create New Task</h3>
+        <button id="task-modal-close" class="btn outline" style="padding:4px 8px; font-size:12px;">✕ Close</button>
+      </div>
+      <form id="task-modal-form">
+        <div class="input-group">
+          <label for="task-title">Task Title</label>
+          <input type="text" id="task-title" required placeholder="What needs to be done?" style="width: 100%;">
+        </div>
+        <div class="input-group">
+          <label for="task-desc">Description</label>
+          <textarea id="task-desc" placeholder="Provide detailed instructions or notes..." rows="4" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); color: var(--text-main); padding: 10px; border-radius: 6px; outline: none; resize: vertical;"></textarea>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom:16px;">
+          <div class="input-group" style="margin-bottom:0;">
+            <label for="task-assignee">Assignee</label>
+            <select id="task-assignee" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color:#fff;"></select>
+          </div>
+          <div class="input-group" style="margin-bottom:0;">
+            <label for="task-priority">Priority</label>
+            <select id="task-priority" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color:#fff;">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom:16px;">
+          <div class="input-group" style="margin-bottom:0;">
+            <label for="task-status">Status</label>
+            <select id="task-status" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color:#fff;">
+              <option value="todo">To Do</option>
+              <option value="in_progress">In Progress</option>
+              <option value="review">Review</option>
+              <option value="completed">Completed</option>
+            </select>
+          </div>
+          <div class="input-group" style="margin-bottom:0;">
+            <label for="task-due-date">Due Date</label>
+            <input type="date" id="task-due-date" style="width: 100%;">
+          </div>
+        </div>
+        <div class="input-group">
+          <label for="task-project">Project</label>
+          <select id="task-project" style="width: 100%; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color:#fff;"></select>
+        </div>
+        <div class="modal-actions" style="margin-top: 20px;">
+          <button type="submit" class="btn primary">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Kanban Task Detail, Comments, and Activity Logs Modal -->
+  <div id="task-detail-modal" class="modal-overlay hidden">
+    <div class="modal glass-panel" style="max-width: 700px; width: 100%; display: flex; flex-direction: column; max-height: 90vh; overflow-y: auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:10px;">
+        <h3 id="td-title-display" style="margin-right: 15px;">Task Details</h3>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button id="td-edit-btn" class="btn outline" style="padding: 4px 8px; font-size:12px;">✏️ Edit</button>
+          <button id="td-delete-btn" class="btn outline" style="padding: 4px 8px; font-size:12px; border-color:#ff6b6b; color:#ff6b6b;">🗑️ Delete</button>
+          <button id="td-close" class="btn outline" style="padding:4px 8px; font-size:12px;">✕ Close</button>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 3fr 2fr; gap:20px; overflow:hidden;">
+        
+        <!-- Left Side: Basic details + comments -->
+        <div style="display:flex; flex-direction:column; gap:15px; overflow-y:auto; padding-right:5px;">
+          <div>
+            <h4 style="opacity:0.7; font-size:0.85em; text-transform:uppercase;">Description</h4>
+            <p id="td-desc-display" style="margin-top:5px; white-space:pre-wrap; background:rgba(0,0,0,0.15); padding:10px; border-radius:6px; min-height:80px; font-size:0.95em;">No description provided.</p>
+          </div>
+          
+          <!-- Comments -->
+          <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:15px;">
+            <h4 style="margin-bottom:10px;">Comments 💬</h4>
+            <div id="td-comments-list" style="display:flex; flex-direction:column; gap:10px; max-height:220px; overflow-y:auto; margin-bottom:10px;"></div>
+            <form id="td-comment-form" style="display:flex; gap:8px;">
+              <input type="text" id="td-comment-input" required placeholder="Write a comment..." style="flex:1; padding:8px 12px; font-size:13px;">
+              <button type="submit" class="btn primary" style="width:auto; padding:8px 15px; font-size:13px;">Post</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Right Side: Status/metadata + Activity History -->
+        <div style="display:flex; flex-direction:column; gap:15px; border-left:1px solid rgba(255,255,255,0.08); padding-left:15px; overflow-y:auto;">
+          <div>
+            <h4 style="opacity:0.7; font-size:0.85em; text-transform:uppercase; margin-bottom:5px;">Status</h4>
+            <select id="td-status-select" style="width:100%; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-size:13px;"></select>
+          </div>
+          <div>
+            <h4 style="opacity:0.7; font-size:0.85em; text-transform:uppercase; margin-bottom:5px;">Priority</h4>
+            <select id="td-priority-select" style="width:100%; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-size:13px;">
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div>
+            <h4 style="opacity:0.7; font-size:0.85em; text-transform:uppercase; margin-bottom:5px;">Assignee</h4>
+            <select id="td-assignee-select" style="width:100%; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-size:13px;"></select>
+          </div>
+          <div>
+            <h4 style="opacity:0.7; font-size:0.85em; text-transform:uppercase; margin-bottom:5px;">Due Date</h4>
+            <input type="date" id="td-due-date-select" style="width:100%; padding:8px; font-size:13px;">
+          </div>
+          <div>
+            <h4 style="opacity:0.7; font-size:0.85em; text-transform:uppercase; margin-bottom:5px;">Project</h4>
+            <select id="td-project-select" style="width:100%; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; font-size:13px;"></select>
+          </div>
+
+          <!-- Activity log -->
+          <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:15px; flex:1; display:flex; flex-direction:column; overflow:hidden;">
+            <h4 style="margin-bottom:8px; font-size:0.9em;">Activity History 📋</h4>
+            <div id="td-activity-log" style="flex:1; overflow-y:auto; font-size:0.8em; display:flex; flex-direction:column; gap:6px; opacity:0.8;"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating team-chat popup -->
+       widget — the app keeps running so presence/notifications are unaffected. -->
+  <div id="chat-dock" class="glass-panel collapsed hidden">
+    <div id="chat-dock-head" class="chat-dock-head">
+      <span class="cd-title"><span class="dot online"></span> Team Chat</span>
+      <span class="cd-actions">
+        <button id="chat-dock-pop" class="cd-btn hidden" title="Pop out into a floating window">⧉</button>
+        <button id="chat-dock-min" class="cd-btn" title="Minimize">▾</button>
+        <button id="chat-dock-close" class="cd-btn" title="Close (you stay online in the background)">✕</button>
+      </span>
+    </div>
+    <div id="chat-dock-body" class="chat-dock-body">
+      <div id="chat-dock-messages" class="chat-dock-messages"></div>
+      <form id="chat-dock-form" class="chat-dock-form">
+        <input type="text" id="chat-dock-input" placeholder="Message the team…" autocomplete="off">
+        <button type="submit" class="icon-btn primary">➤</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Re-open bubble, shown after the chat popup is closed. -->
+  <button id="chat-bubble" class="hidden" title="Open team chat">💬<span id="chat-bubble-badge" class="hidden">0</span></button>
+
+  <!-- Re-enabled live 3D office scene -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.min.js",
+      "three/addons/": "./vendor/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="js/office3d.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/webrtc.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/features.js"></script>
+  <script src="js/call.js"></script>
+  <script src="js/edith.js"></script>
+  <!-- Ko-fi tip overlay widget -->
+  <script src='https://storage.ko-fi.com/cdn/scripts/overlay-widget.js'></script>
+  <script>
+    kofiWidgetOverlay.draw('pradhuman_dev', {
+      'type': 'floating-chat',
+      'floating-chat.donateButton.text': 'Support me',
+      'floating-chat.donateButton.background-color': '#00b9fe',
+      'floating-chat.donateButton.text-color': '#fff'
+    });
+  </script>
+</body>
+</html>

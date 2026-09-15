@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*credentials*.json
+*service-account*.json
+*secret*.json
+*token*.json
+
+# Local Database
+*.db
+*.sqlite
+*.sqlite3
+backend/uploads/
+
+# Server-side generated secrets / runtime config (set via admin UI)
+jwt-secret.key
+backend/jwt-secret.key
+runtime-config.json
+backend/runtime-config.json
+
+# Build files
+dist/
+dist-new/
+dist-linux/
+Team Hearth/dist/
+
+# Capacitor / Android — the native project is generated in CI, not committed
+Team Hearth/android/
+.gradle/
+
+# OS files
+.DS_Store
+Thumbs.db
+.obsidian/
+.playwright-mcp/
+/*.png
+
+# Scratch & IDE
+scratch/
+.antigravity/
+.gemini/
+.claude/
