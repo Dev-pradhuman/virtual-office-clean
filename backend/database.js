@@ -115,6 +115,18 @@ function initDb() {
     // Ensure designation column exists for older database instances
     db.run("ALTER TABLE users ADD COLUMN designation TEXT DEFAULT ''", () => {});
 
+    // Reusable per-user grants. Absence of a row means the permission is denied.
+    db.run(`CREATE TABLE IF NOT EXISTS user_permissions (
+      user_id INTEGER NOT NULL,
+      permission_key TEXT NOT NULL,
+      granted_by INTEGER,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, permission_key),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+    // Old client-selected states are no longer presence states.
+    db.run("UPDATE users SET status = 'offline' WHERE status != 'online'");
+
     // Messages table. recipient_id NULL = team/public message; otherwise a DM.
     db.run(`CREATE TABLE IF NOT EXISTS messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -53,8 +53,6 @@
   --color-surface-700: var(--surface-700);
   --color-surface-900: var(--surface-900);
   --color-presence-online: var(--presence-online);
-  --color-presence-away: var(--presence-away);
-  --color-presence-busy: var(--presence-busy);
   --color-presence-offline: var(--presence-offline);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -105,8 +103,7 @@
   --surface-900: oklch(0.22 0.04 265);
 
   --presence-online: oklch(0.72 0.17 162); /* emerald */
-  --presence-away: oklch(0.82 0.16 85);    /* amber */
-  --presence-busy: oklch(0.62 0.22 27);    /* red */
+  --danger: oklch(0.62 0.22 27);    /* red */
   --presence-offline: oklch(0.78 0.01 255);
 
   /* User-preference-driven overrides (set via inline style on <html>) */
@@ -388,8 +385,8 @@
 .live-dot {
   display: inline-block;
   width: 6px; height: 6px; border-radius: 999px;
-  background: var(--presence-busy);
-  box-shadow: 0 0 0 0 var(--presence-busy);
+  background: var(--danger);
+  box-shadow: 0 0 0 0 var(--danger);
   animation: pulse-settle 1.4s ease-out infinite;
 }
 .waveform-bar {

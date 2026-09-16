@@ -14,6 +14,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const db = require('./database');
 const setupSocket = require('./socket');
 const configStore = require('./config-store');
+const permissions = require('./permissions');
 
 const app = express();
 const server = http.createServer(app);
@@ -304,6 +305,52 @@ app.get('/api/users', requireAuth, (req, res) => {
   });
 });
 
+app.get('/api/me/permissions', requireAuth, (req, res) => {
+  permissions.hasPermission(db, req.user.id, permissions.CAN_TURN_OFF_V_OFFICE, (err, granted) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json({ [permissions.CAN_TURN_OFF_V_OFFICE]: granted });
+  });
+});
+
+// Main process calls this with the current Bearer token before any full exit.
+// A renderer-provided boolean is never accepted as authorization.
+app.post('/api/desktop/shutdown-authorization', requireAuth, (req, res) => {
+  permissions.hasPermission(db, req.user.id, permissions.CAN_TURN_OFF_V_OFFICE, (err, granted) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    if (!granted) return res.status(403).json({ error: 'You cannot turn off Virtual Office' });
+    res.json({ allowed: true, userId: req.user.id });
+  });
+});
+
+app.get('/api/admin/user-permissions', requireAuth, requireAdmin, (req, res) => {
+  db.all('SELECT user_id, permission_key FROM user_permissions ORDER BY user_id, permission_key', [], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json(rows);
+  });
+});
+
+app.put('/api/admin/users/:id/permissions/:key', requireAuth, requireAdmin, (req, res) => {
+  const userId = Number(req.params.id);
+  const key = req.params.key;
+  const granted = req.body && req.body.granted;
+  if (!Number.isSafeInteger(userId) || userId <= 0 || !permissions.SUPPORTED_PERMISSIONS.has(key) || typeof granted !== 'boolean') {
+    return res.status(400).json({ error: 'Invalid permission update' });
+  }
+  db.get('SELECT id FROM users WHERE id = ?', [userId], (err, user) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const sql = granted
+      ? 'INSERT OR REPLACE INTO user_permissions (user_id, permission_key, granted_by, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)'
+      : 'DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?';
+    const args = granted ? [userId, key, req.user.id] : [userId, key];
+    db.run(sql, args, (writeErr) => {
+      if (writeErr) return res.status(500).json({ error: 'Database error' });
+      if (io) io.emit('user_permission_changed', { userId, permissionKey: key });
+      res.json({ userId, permissionKey: key, granted });
+    });
+  });
+});
+
 // WebRTC ICE config. Serves STUN + TURN so calls/screen-share can relay across
 // home networks. Configure a real (low-latency) TURN via env vars:
 //   TURN_SERVERS = JSON array of RTCIceServer objects, OR
@@ -505,9 +552,6 @@ app.get('/api/admin/config', requireAuth, requireAdmin, (req, res) => {
       hasRefreshToken: !!g.refreshToken,
       configured: !!(g.clientId && g.clientSecret && g.refreshToken && g.folderId)
     },
-    exitSecurity: {
-      hasQuitPassword: !!(c.quitPassword || process.env.QUIT_PASSWORD)
-    },
     updater: {
       updateChannel: c.updateChannel || 'stable'
     }
@@ -526,9 +570,6 @@ app.post('/api/admin/config', requireAuth, requireAdmin, (req, res) => {
   }
   
   const updates = { google };
-  if (incoming.exitSecurity && incoming.exitSecurity.quitPassword) {
-    updates.quitPassword = incoming.exitSecurity.quitPassword.trim();
-  }
   if (incoming.updater && incoming.updater.updateChannel) {
     updates.updateChannel = incoming.updater.updateChannel.trim();
   }
@@ -560,6 +601,7 @@ app.get('/api/admin/audit-log', requireAuth, requireAdmin, (req, res) => {
     SELECT h.*, u.username 
     FROM user_status_history h
     LEFT JOIN users u ON h.user_id = u.id
+    WHERE h.status NOT IN ('away', 'busy', 'idle')
     ORDER BY h.timestamp DESC 
     LIMIT 200
   `, [], (err, rows) => {

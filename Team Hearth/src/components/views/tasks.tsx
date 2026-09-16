@@ -33,7 +33,7 @@ const COLUMNS: { id: Task["status"]; title: string; hint: string }[] = [
 const PRIORITY = {
   low: { label: "Low", cls: "bg-muted text-muted-foreground" },
   medium: { label: "Medium", cls: "bg-brand/10 text-brand" },
-  high: { label: "High", cls: "bg-[var(--presence-busy)]/10 text-[var(--presence-busy)]" },
+  high: { label: "High", cls: "bg-[var(--danger)]/10 text-[var(--danger)]" },
 };
 
 export function TasksView() {

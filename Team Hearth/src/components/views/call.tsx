@@ -125,7 +125,7 @@ export function CallView() {
             <div className="w-px h-6 bg-border mx-1" />
             <button
               onClick={leave}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--presence-busy)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
+              className="flex items-center gap-1.5 rounded-lg bg-[var(--danger)] px-3 py-1.5 text-xs font-semibold text-white hover:brightness-110"
             >
               <PhoneOff className="size-3.5" />
               Leave
@@ -156,7 +156,7 @@ export function CallView() {
                 {p.micOn ? (
                   <Mic className="size-3.5 text-muted-foreground" />
                 ) : (
-                  <MicOff className="size-3.5 text-[var(--presence-busy)]" />
+                  <MicOff className="size-3.5 text-[var(--danger)]" />
                 )}
               </li>
             ))}
@@ -184,7 +184,7 @@ function CtrlBtn({
       title={label}
       className={cn(
         "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
-        active ? "bg-muted hover:bg-muted/70" : "bg-[var(--presence-busy)]/10 text-[var(--presence-busy)]",
+        active ? "bg-muted hover:bg-muted/70" : "bg-[var(--danger)]/10 text-[var(--danger)]",
       )}
     >
       {children}

@@ -38,7 +38,9 @@ function readConfig() {
     try {
       const encryptedBuffer = fs.readFileSync(CONFIG_PATH);
       const decryptedString = safeStorage.decryptString(encryptedBuffer);
-      return JSON.parse(decryptedString);
+      const config = JSON.parse(decryptedString);
+      delete config.quitPassword;
+      return config;
     } catch (e) {
       console.error('[config] Failed to decrypt configuration:', e.message);
     }
@@ -49,11 +51,16 @@ function readConfig() {
     try {
       const plaintextString = fs.readFileSync(PLAINTEXT_PATH, 'utf8');
       const parsed = JSON.parse(plaintextString);
+      delete parsed.quitPassword;
       // Migrate plaintext configuration to encrypted store if encryption is supported
       if (isEncryptionSupported()) {
-        console.log('[config] Migrating plaintext config to safeStorage...');
-        writeConfig(parsed);
-        try { fs.unlinkSync(PLAINTEXT_PATH); } catch (_) {}
+        try {
+          fs.writeFileSync(CONFIG_PATH, safeStorage.encryptString(JSON.stringify(parsed)));
+          fs.unlinkSync(PLAINTEXT_PATH);
+          console.log('[config] Migrated plaintext config to safeStorage.');
+        } catch (migrationError) {
+          console.error('[config] Could not encrypt legacy config:', migrationError.message);
+        }
       }
       return parsed;
     } catch (e) {
@@ -66,6 +73,7 @@ function readConfig() {
 
 function writeConfig(partial) {
   const merged = { ...readConfig(), ...partial };
+  delete merged.quitPassword;
   const jsonString = JSON.stringify(merged, null, 2);
 
   if (isEncryptionSupported()) {

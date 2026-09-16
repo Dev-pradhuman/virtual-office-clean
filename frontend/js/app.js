@@ -60,14 +60,19 @@ loginForm.addEventListener('submit', async (e) => {
   const password = document.getElementById('password').value;
 
   try {
-    const res = await fetch(`${API_URL}/api/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    let data;
+    if (window.electronAPI?.authenticateHeadquarters) {
+      data = await window.electronAPI.authenticateHeadquarters(username, password, API_URL);
+      if (!data.success) throw new Error(data.error || 'Invalid credentials');
+    } else {
+      const res = await fetch(`${API_URL}/api/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+    }
 
     token = data.token;
     currentUser = data.user;
@@ -231,7 +236,6 @@ async function initApp() {
           sessionId: currentSessionId,
           deviceId: currentDeviceId || 'browser_client',
           appVersion: '1.0.0',
-          status: myStatus,
           timestamp: Date.now(),
           stats: stats
         });
@@ -309,10 +313,12 @@ async function initApp() {
     }
   });
 
+  socket.on('user_permission_changed', () => { loadShutdownPermission(); if (currentUser?.role === 'admin') loadShutdownAdminList(); });
+
   socket.on('user_status_change', (data) => {
     updateUserStatus(data);
     // Only log online/offline transitions to the feed; no toast (it was spammy).
-    const isOnline = data.status === 'online' || data.status === 'away' || data.status === 'busy';
+    const isOnline = data.status === 'online';
     if (data.status === 'online' || data.status === 'offline') {
       const text = `${getUserName(data.id)} is now ${data.status}`;
       addActivity(text);
@@ -436,6 +442,7 @@ async function initApp() {
   // Logout
   document.getElementById('logout-btn').addEventListener('click', async () => {
     if (window.electronAPI) {
+      await window.electronAPI.clearDesktopAuth?.();
       await window.electronAPI.clearConfig();
     } else {
       localStorage.removeItem('virtual_office_token');
@@ -585,7 +592,7 @@ const STATIC_AUTO_BACKDROPS = {
 
 // Sorted online usernames joined by '|' (empty = nobody online).
 function currentOnlineKey() {
-  return users.filter(u => u.status === 'online' || u.status === 'away' || u.status === 'busy')
+  return users.filter(u => u.status === 'online')
     .map(u => u.username).sort().join('|');
 }
 function refreshBackdrop() {
@@ -760,7 +767,6 @@ function setupProfile() {
     document.getElementById('profile-username').textContent = `Signed in as ${currentUser.username}`;
     form.reset();
     setStatus('', '');
-    syncStatusButtons();
     document.getElementById('status-message').value = currentUser.status_message || '';
     modal.classList.remove('hidden');
   });
@@ -795,60 +801,98 @@ function setupProfile() {
   });
 }
 
-// --- Status (manual) + idle auto-away ---------------------------------------
-let myStatus = 'online';        // what the user chose (online/away/busy)
-let myStatusMessage = '';
-let autoAway = false;           // true when idle set us away (so activity restores)
-
-function applyMyStatus(status, message, fromUser) {
-  myStatus = status;
-  if (typeof message === 'string') myStatusMessage = message;
-  currentUser.status = status;
-  currentUser.status_message = myStatusMessage;
-  if (socket) socket.emit('set_status', { status, message: myStatusMessage });
-  if (status === 'online' || status === 'away' || status === 'busy') {
-    reportApps();
-  }
-  syncStatusButtons();
-}
-
-function syncStatusButtons() {
-  document.querySelectorAll('.status-opt').forEach(b =>
-    b.classList.toggle('active', b.dataset.status === myStatus));
-}
-
+// Status messages are independent of Online/Offline connection presence.
 function setupStatusControls() {
-  document.querySelectorAll('.status-opt').forEach(btn => {
-    btn.onclick = () => {
-      autoAway = false; // explicit choice wins over idle
-      applyMyStatus(btn.dataset.status, undefined, true);
-    };
-  });
   const saveBtn = document.getElementById('status-save');
   if (saveBtn) saveBtn.onclick = () => {
-    const msg = document.getElementById('status-message').value.trim();
-    autoAway = false;
-    applyMyStatus(myStatus || 'online', msg, true);
+    const message = document.getElementById('status-message').value.trim();
+    currentUser.status_message = message;
+    socket?.emit('set_status_message', { message });
   };
-  setupIdleDetection();
 }
 
-// Auto-Away after a few minutes with no mouse/keyboard activity; returns to the
-// chosen status on the next activity. Never overrides a manual Busy/Away.
-function setupIdleDetection() {
-  const IDLE_MS = 5 * 60 * 1000;
-  let timer = null;
-  const goIdle = () => {
-    if (myStatus === 'online') { autoAway = true; applyMyStatus('away'); }
+async function loadShutdownPermission() {
+  const section = document.getElementById('turn-off-section');
+  if (!section) return;
+  section.classList.add('hidden');
+  if (!window.electronAPI?.turnOffVirtualOffice || !token) return;
+  try {
+    const res = await fetch(`${API_URL}/api/me/permissions`, { headers: authHeaders() });
+    if (!res.ok) return;
+    const grants = await res.json();
+    section.classList.toggle('hidden', !grants.can_turn_off_v_office);
+  } catch (e) { /* permission unknown: keep the action hidden */ }
+}
+
+async function loadShutdownAdminList() {
+  const list = document.getElementById('shutdown-permissions-list');
+  const status = document.getElementById('shutdown-permissions-status');
+  if (!list || currentUser?.role !== 'admin') return;
+  try {
+    const [usersRes, grantsRes] = await Promise.all([
+      fetch(`${API_URL}/api/users`, { headers: authHeaders() }),
+      fetch(`${API_URL}/api/admin/user-permissions`, { headers: authHeaders() })
+    ]);
+    if (!usersRes.ok || !grantsRes.ok) throw new Error('Could not load permissions');
+    const people = await usersRes.json();
+    const grants = await grantsRes.json();
+    const allowed = new Set(grants.filter(g => g.permission_key === 'can_turn_off_v_office').map(g => Number(g.user_id)));
+    list.replaceChildren();
+    people.forEach(person => {
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px;border-bottom:1px solid rgba(255,255,255,.08)';
+      const name = document.createElement('span');
+      name.textContent = `${person.username} — Can turn off V-Office`;
+      const toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.checked = allowed.has(Number(person.id));
+      toggle.style.width = 'auto';
+      toggle.onchange = async () => {
+        toggle.disabled = true;
+        status.textContent = '';
+        try {
+          const res = await fetch(`${API_URL}/api/admin/users/${person.id}/permissions/can_turn_off_v_office`, {
+            method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ granted: toggle.checked })
+          });
+          if (!res.ok) throw new Error((await res.json()).error || 'Permission update failed');
+          if (Number(person.id) === Number(currentUser.id)) loadShutdownPermission();
+        } catch (e) {
+          toggle.checked = !toggle.checked;
+          status.textContent = e.message;
+          status.className = 'settings-status err';
+        } finally { toggle.disabled = false; }
+      };
+      row.append(name, toggle);
+      list.appendChild(row);
+    });
+  } catch (e) {
+    status.textContent = e.message;
+    status.className = 'settings-status err';
+  }
+}
+
+function setupTurnOffButton() {
+  const button = document.getElementById('turn-off-v-office');
+  const status = document.getElementById('turn-off-status');
+  if (!button) return;
+  button.onclick = async () => {
+    button.disabled = true;
+    status.textContent = '';
+    try {
+      const result = await window.electronAPI.turnOffVirtualOffice();
+      if (!result.success) throw new Error(result.error || 'Shutdown permission denied');
+      if (socket?.connected) {
+        try { await socket.timeout(1000).emitWithAck('client_graceful_exit'); } catch (e) {}
+        socket.disconnect();
+      }
+      status.textContent = 'Turning off Virtual Office…';
+    } catch (e) {
+      status.textContent = e.message;
+      status.className = 'settings-status err';
+      button.disabled = false;
+    }
   };
-  const onActivity = () => {
-    if (autoAway) { autoAway = false; applyMyStatus('online'); }
-    clearTimeout(timer);
-    timer = setTimeout(goIdle, IDLE_MS);
-  };
-  ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart'].forEach(ev =>
-    window.addEventListener(ev, onActivity, { passive: true }));
-  timer = setTimeout(goIdle, IDLE_MS);
 }
 
 // --- Admin settings (Google Drive & Updates) --------------------------------
@@ -1079,6 +1123,9 @@ async function setupSettings() {
 
   // Load Settings
   await loadSettings();
+  setupTurnOffButton();
+  await loadShutdownPermission();
+  if (currentUser.role === 'admin') await loadShutdownAdminList();
 
   // Show admin settings block if user is admin
   const adminSection = document.getElementById('admin-settings-section');
@@ -1112,7 +1159,6 @@ async function setupSettings() {
         notifActivity: document.getElementById('settings-notif-activity').checked,
         notifSounds: document.getElementById('settings-notif-sounds').checked,
         appAutostart: true,
-        appTray: document.getElementById('settings-app-tray').checked,
         appLanguage: document.getElementById('settings-app-language').value,
         perfResources: document.getElementById('settings-perf-resources').checked,
         perfHardware: document.getElementById('settings-perf-hardware').checked,
@@ -1132,16 +1178,12 @@ async function setupSettings() {
 
       // Save admin configs if admin
       if (currentUser.role === 'admin') {
-        const quitPassInput = document.getElementById('settings-quit-pass').value;
         const adminBody = {
           google: {
             clientId: document.getElementById('g-client-id').value,
             folderId: document.getElementById('g-folder-id').value,
             clientSecret: document.getElementById('g-client-secret').value,
             refreshToken: document.getElementById('g-refresh-token').value
-          },
-          exitSecurity: {
-            quitPassword: quitPassInput || undefined
           },
           updater: {
             updateChannel: document.getElementById('settings-update-channel').value
@@ -1155,7 +1197,6 @@ async function setupSettings() {
         if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
         document.getElementById('g-client-secret').value = '';
         document.getElementById('g-refresh-token').value = '';
-        document.getElementById('settings-quit-pass').value = '';
       }
 
       setStatus('Saved.', 'ok');
@@ -1239,7 +1280,6 @@ async function loadAuditLog() {
       const eventColor = {
         launch: '#3498db',
         online: '#2ecc71',
-        idle: '#f1c40f',
         disconnected: '#e67e22',
         closed: '#95a5a6',
         unexpected_termination: '#e74c3c',
@@ -1313,7 +1353,6 @@ async function loadSettings() {
     if (document.getElementById('settings-app-autostart')) {
       document.getElementById('settings-app-autostart').checked = config.appAutostart !== false;
     }
-    document.getElementById('settings-app-tray').checked = config.appTray !== false;
     document.getElementById('settings-app-language').value = config.appLanguage || 'en';
     document.getElementById('settings-perf-resources').checked = !!config.perfResources;
     document.getElementById('settings-perf-hardware').checked = config.perfHardware !== false;
@@ -1331,7 +1370,7 @@ async function loadSettings() {
             if (descEl) descEl.style.display = 'none';
           } else {
             statusEl.textContent = 'Inactive (Missing dependencies)';
-            statusEl.style.color = 'var(--busy-color)';
+            statusEl.style.color = 'var(--danger-color)';
             if (descEl) descEl.style.display = 'block';
           }
         }
@@ -1350,13 +1389,11 @@ async function loadSettings() {
       if (!res.ok) return;
       const data = await res.json();
       const g = data.google || {};
-      const e = data.exitSecurity || {};
       const u = data.updater || {};
       document.getElementById('g-client-id').value = g.clientId || '';
       document.getElementById('g-folder-id').value = g.folderId || '';
       document.getElementById('g-secret-set').classList.toggle('hidden', !g.hasClientSecret);
       document.getElementById('g-token-set').classList.toggle('hidden', !g.hasRefreshToken);
-      document.getElementById('settings-quit-pass-set').classList.toggle('hidden', !e.hasQuitPassword);
       
       const channelSelect = document.getElementById('settings-update-channel');
       if (channelSelect) {
@@ -1451,7 +1488,7 @@ function renderTeam() {
   if (!el) return;
   el.innerHTML = '';
   users.forEach(u => {
-    const active = u.status === 'online' || u.status === 'away' || u.status === 'busy';
+    const active = u.status === 'online';
     const row = document.createElement('div');
     row.className = 'team-member';
     row.title = 'Click to view & call';
@@ -1475,7 +1512,7 @@ function renderTeam() {
     const st = document.createElement('div');
     st.className = 't-status' + (active ? ' online' : '');
     // Show the live tab when available, else status message / state.
-    const word = u.status === 'away' ? 'Away' : u.status === 'busy' ? 'Busy' : 'Online';
+    const word = 'Online';
     st.textContent = active
       ? (u.current_view ? `🗂 ${u.current_label || u.current_view}` : (u.status_message || u.current_project || word))
       : 'Offline';
@@ -1511,8 +1548,8 @@ function refreshUserModal(id) {
   if (id == null || userModalId !== id) return;
   const u = users.find(x => String(x.id) === String(id));
   if (!u) return;
-  const statusLabel = { online: 'Online', away: 'Away', busy: 'Busy' };
-  const online = u.status === 'online' || u.status === 'away' || u.status === 'busy';
+  const statusLabel = { online: 'Online' };
+  const online = u.status === 'online';
   let stateText = (online ? (statusLabel[u.status] || 'Online') : 'Offline');
   if (u.designation) stateText += ` · ${u.designation}`;
   if (u.status_message) stateText += ` (${u.status_message})`;
@@ -1565,7 +1602,7 @@ function fmtDuration(sec) {
 async function reportApps() {
   if (!window.electronAPI || !window.electronAPI.getOpenWindows || !socket || !socket.connected) return;
   try {
-    if (!currentUser || currentUser.status === 'offline' || currentUser.status === 'closed') return;
+    if (!currentUser || currentUser.status !== 'online') return;
     const apps = await window.electronAPI.getOpenWindows();
     socket.emit('apps_update', { apps });
   } catch (e) { /* ignore */ }
@@ -1649,7 +1686,7 @@ function renderWorkstations() {
   container.innerHTML = '';
 
   users.forEach(u => {
-    const isOnline = u.status === 'online' || u.status === 'away' || u.status === 'busy';
+    const isOnline = u.status === 'online';
     const statusClass = isOnline ? 'online' : 'offline';
     const html = `
       <div class="workstation ${statusClass}" id="ws-${u.id}">
@@ -1687,9 +1724,11 @@ function renderWorkstations() {
 }
 
 function updateUserStatus(data) {
+  const u = users.find(u => String(u.id) === String(data.id));
+  if (!data.status && u) data.status = u.status;
   const ws = document.getElementById(`ws-${data.id}`);
   if (ws) {
-    const isOnline = data.status === 'online' || data.status === 'away' || data.status === 'busy';
+    const isOnline = data.status === 'online';
     ws.className = `workstation ${isOnline ? 'online' : 'offline'}`;
     const indicator = ws.querySelector('.status-indicator');
     if (indicator) {
@@ -1702,7 +1741,6 @@ function updateUserStatus(data) {
   }
 
   // Update in local users array
-  const u = users.find(u => String(u.id) === String(data.id));
   if (u) {
     u.status = data.status;
     if (data.message !== undefined) u.status_message = data.message;
@@ -1739,7 +1777,7 @@ function renderConvos() {
     } else {
       const wrap = document.createElement('div'); wrap.className = 'convo-av-wrap';
       const img = document.createElement('img'); img.className = 'convo-av'; img.src = it.avatar || '';
-      const isOnline = it.status === 'online' || it.status === 'away' || it.status === 'busy';
+      const isOnline = it.status === 'online';
       const dot = document.createElement('span'); dot.className = 't-dot' + (isOnline ? ' ' + it.status : '');
       wrap.append(img, dot); row.appendChild(wrap);
     }
@@ -1927,53 +1965,6 @@ function addActivity(text) {
     });
   }
 
-  function setupQuitPasswordModal() {
-    const quitModal = document.getElementById('quit-modal');
-    const quitForm = document.getElementById('quit-form');
-    const quitPass = document.getElementById('quit-pass');
-    const quitStatus = document.getElementById('quit-status');
-    const quitClose = document.getElementById('quit-close');
-
-    if (window.electronAPI && window.electronAPI.onPromptQuitPassword) {
-      window.electronAPI.onPromptQuitPassword(() => {
-        if (quitModal) {
-          quitStatus.textContent = '';
-          quitStatus.className = 'settings-status';
-          quitForm.reset();
-          quitModal.classList.remove('hidden');
-          quitPass.focus();
-        }
-      });
-    }
-
-    if (quitClose) {
-      quitClose.onclick = () => {
-        if (quitModal) quitModal.classList.add('hidden');
-      };
-    }
-
-    if (quitForm) {
-      quitForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        quitStatus.textContent = 'Verifying...';
-        quitStatus.className = 'settings-status';
-        try {
-          const res = await window.electronAPI.verifyQuitPassword(quitPass.value);
-          if (res && res.success) {
-            quitStatus.textContent = 'Closing...';
-            quitStatus.className = 'settings-status ok';
-          } else {
-            quitStatus.textContent = (res && res.error) || 'Incorrect password';
-            quitStatus.className = 'settings-status err';
-          }
-        } catch (err) {
-          quitStatus.textContent = 'Verification failed';
-          quitStatus.className = 'settings-status err';
-        }
-      });
-    }
-  }
-
   function setupUpdater() {
     if (!window.electronAPI || !window.electronAPI.onUpdaterEvent) return;
 
@@ -2071,7 +2062,6 @@ function addActivity(text) {
     const close = document.getElementById('theme-close');
     if (btn) btn.onclick = () => modal.classList.remove('hidden');
     if (close) close.onclick = () => modal.classList.add('hidden');
-    setupQuitPasswordModal();
     setupUpdater();
   }
 

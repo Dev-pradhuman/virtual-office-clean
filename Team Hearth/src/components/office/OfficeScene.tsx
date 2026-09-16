@@ -11,11 +11,11 @@ const DEMO_CYCLE: Record<string, PresenceStatus>[] = [
   { u1: "offline", u2: "offline", u3: "online" },
   { u1: "online", u2: "online", u3: "offline" },
   { u1: "online", u2: "online", u3: "online" },
-  { u1: "online", u2: "away", u3: "online" },
+  { u1: "online", u2: "offline", u3: "online" },
 ];
 
 function pickBackdropKey(presence: Record<string, PresenceStatus>): SceneKey {
-  const online = Object.values(presence).filter((s) => s === "online" || s === "busy").length;
+  const online = Object.values(presence).filter((s) => s === "online").length;
   if (online === 0) return "none";
   if (online === 1) return "solo";
   if (online === 2) return "duo";
@@ -23,17 +23,13 @@ function pickBackdropKey(presence: Record<string, PresenceStatus>): SceneKey {
 }
 
 function isLit(status: PresenceStatus) {
-  return status === "online" || status === "busy" || status === "away";
+  return status === "online";
 }
 
 function statusColor(status: PresenceStatus) {
   switch (status) {
     case "online":
       return "var(--presence-online, #22c55e)";
-    case "busy":
-      return "var(--presence-busy, #ef4444)";
-    case "away":
-      return "var(--presence-away, #f59e0b)";
     default:
       return "#3b4763";
   }
@@ -52,8 +48,7 @@ function Desk({
 }) {
   const lit = isLit(status);
   const glow = statusColor(status);
-  const inCall = user.inCall && (status === "online" || status === "busy");
-  const isAway = status === "away";
+  const inCall = user.inCall && status === "online";
   const offline = status === "offline";
 
   // Structural collapse for offline — the desk becomes a low silhouette
@@ -77,12 +72,9 @@ function Desk({
         rx="120"
         ry="60"
         fill={glow}
-        opacity={lit ? (isAway ? 0.14 : 0.24) : 0.03}
+        opacity={lit ? 0.24 : 0.03}
         style={{ transition: "opacity 700ms ease, fill 700ms ease" }}
       >
-        {isAway && (
-          <animate attributeName="opacity" values="0.06;0.22;0.06" dur="2.4s" repeatCount="indefinite" />
-        )}
       </ellipse>
       {/* In-call animated ring under the monitor */}
       {inCall && (
@@ -129,12 +121,9 @@ function Desk({
         height="72"
         rx="4"
         fill={lit ? glow : "#0a0f1e"}
-        opacity={lit ? (isAway ? 0.22 : 0.5) : 0.1}
+        opacity={lit ? 0.5 : 0.1}
         style={{ transition: "fill 700ms ease, opacity 700ms ease" }}
       >
-        {isAway && (
-          <animate attributeName="opacity" values="0.14;0.32;0.14" dur="2.4s" repeatCount="indefinite" />
-        )}
       </rect>
       {/* Screen glare highlight — top-left directional light */}
       {lit && (
@@ -224,7 +213,7 @@ function Desk({
             fontFamily="ui-sans-serif, system-ui"
             letterSpacing="0.14em"
           >
-            {user.initials} · AWAY
+            {user.initials} · OFFLINE
           </text>
         </g>
       )}

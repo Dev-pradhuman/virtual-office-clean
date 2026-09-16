@@ -33,7 +33,7 @@ export function IncomingCallPrompt() {
         </button>
         <button
           onClick={decline}
-          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[var(--presence-busy)] py-2 text-xs font-semibold text-white hover:brightness-110"
+          className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-[var(--danger)] py-2 text-xs font-semibold text-white hover:brightness-110"
         >
           <PhoneOff className="size-3.5" /> Decline
         </button>

@@ -9,8 +9,8 @@
   --text-muted: #94a3b8;
   --online-color: #10b981;
   --offline-color: #64748b;
-  --busy-color: #ef4444;
-  --away-color: #f59e0b;
+  --danger-color: #ef4444;
+  --warning-color: #f59e0b;
   --rgb-glow: 0 0 15px rgba(99, 102, 241, 0.5);
   /* Theme-driven surfaces (overridden by body[data-theme]) */
   --app-bg: #05070c;
@@ -360,7 +360,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 .qa-btn:hover { background: rgba(255, 255, 255, 0.09); transform: translateY(-1px); }
 .qa-btn.primary { background: linear-gradient(135deg, var(--primary-color), var(--accent-2)); border-color: transparent; box-shadow: 0 0 16px rgba(99, 102, 241, 0.4); }
 .qa-btn.primary:hover { box-shadow: 0 0 24px rgba(99, 102, 241, 0.6); }
-.qa-btn.sharing { border-color: var(--busy-color); color: var(--busy-color); background: rgba(239, 68, 68, 0.08); }
+.qa-btn.sharing { border-color: var(--danger-color); color: var(--danger-color); background: rgba(239, 68, 68, 0.08); }
 
 /* Bottom status bar */
 #status-bar { display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 22px; font-size: 12px; color: var(--text-muted); background: var(--statusbar-bg); border-radius: 14px; }
@@ -407,7 +407,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 .wb-tools { display: flex; align-items: center; gap: 12px; }
 .wb-tools input[type="color"] { width: 34px; height: 34px; padding: 0; border: none; background: none; cursor: pointer; }
 .wb-tools .btn { width: auto; }
-#wb-mode.private { border-color: var(--away-color); color: var(--away-color); }
+#wb-mode.private { border-color: var(--warning-color); color: var(--warning-color); }
 #wb-mode.private:hover { background: rgba(245, 158, 11, 0.1); }
 .wb-canvas-wrap { flex: 1; position: relative; overflow: hidden; background: #0f1117; }
 #wb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
@@ -449,7 +449,6 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 
 .status-online { background: var(--online-color); }
 .status-offline { background: var(--offline-color); }
-.status-busy { background: var(--busy-color); }
 
 .icon-btn {
   background: transparent;
@@ -902,8 +901,8 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 
 /* Active "Stop Sharing" state for the share button */
 .btn.outline.sharing {
-  border-color: var(--busy-color);
-  color: var(--busy-color);
+  border-color: var(--danger-color);
+  color: var(--danger-color);
 }
 
 .btn.outline.sharing:hover {
@@ -911,7 +910,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 }
 
 /* ===== Voice / Video Call ===== */
-.btn.danger { background: var(--busy-color); color: #fff; }
+.btn.danger { background: var(--danger-color); color: #fff; }
 .btn.danger:hover { background: #dc2626; box-shadow: 0 0 16px rgba(239, 68, 68, 0.5); }
 
 #call-panel {
@@ -994,7 +993,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 
 .call-controls { display: flex; gap: 8px; justify-content: center; }
 .call-controls .btn { width: auto; flex: 1; }
-.call-controls .btn.off { border-color: var(--busy-color); color: var(--busy-color); }
+.call-controls .btn.off { border-color: var(--danger-color); color: var(--danger-color); }
 
 /* Start-call modal */
 .call-start { width: 380px !important; text-align: left; }
@@ -1060,7 +1059,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 }
 
 .settings-status.ok { color: var(--online-color); }
-.settings-status.err { color: var(--busy-color); }
+.settings-status.err { color: var(--danger-color); }
 
 /* Modals */
 .modal {
@@ -1172,7 +1171,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 }
 .wb-swatch:hover { transform: scale(1.12); }
 .wb-swatch.active { border-color: var(--text-main); box-shadow: 0 0 0 2px var(--primary-color); }
-#wb-eraser.active { border-color: var(--away-color); color: var(--away-color); background: rgba(245,158,11,0.12); }
+#wb-eraser.active { border-color: var(--warning-color); color: var(--warning-color); background: rgba(245,158,11,0.12); }
 
 /* ===== New: join ongoing call pill ===== */
 #qa-join-call { border-color: var(--online-color); color: var(--online-color); background: rgba(16,185,129,0.1); animation: pulse 2s infinite; }
@@ -1223,7 +1222,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 #chat-bubble:hover { transform: scale(1.08); }
 #chat-bubble-badge {
   position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px;
-  padding: 0 4px; border-radius: 9px; background: var(--busy-color); color: #fff;
+  padding: 0 4px; border-radius: 9px; background: var(--danger-color); color: #fff;
   font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
   border: 2px solid var(--app-bg);
 }
@@ -1231,23 +1230,11 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 /* Invite button keeps a sensible width in the call controls row */
 #call-invite { flex: 1; }
 
-/* ===== Status colors (away/busy) for dots + indicators ===== */
+/* ===== Online/Offline presence indicators ===== */
 .t-dot.online { background: var(--online-color); box-shadow: 0 0 8px var(--online-color); }
-.t-dot.away { background: var(--away-color); box-shadow: 0 0 8px var(--away-color); }
-.t-dot.busy { background: var(--busy-color); box-shadow: 0 0 8px var(--busy-color); }
-.status-indicator.status-away { background: var(--away-color); }
-.status-indicator.status-busy { background: var(--busy-color); }
-
 /* ===== Status box in the profile modal ===== */
 .status-box { text-align: left; margin: 14px 0 18px; padding: 14px; border: 1px solid var(--glass-border); border-radius: 12px; background: rgba(255,255,255,0.03); }
 .status-box-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
-.status-options { display: flex; gap: 8px; margin: 10px 0; }
-.status-opt {
-  flex: 1; padding: 8px 6px; font-size: 12.5px; cursor: pointer; color: var(--text-main);
-  background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border); border-radius: 9px; transition: all 0.15s;
-}
-.status-opt:hover { background: rgba(255,255,255,0.09); }
-.status-opt.active { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(99,102,241,0.25); }
 .status-msg-row { display: flex; gap: 8px; }
 .status-msg-row input { flex: 1; }
 .status-msg-row .btn { width: auto; }
@@ -1304,7 +1291,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 .convo-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .convo-unread {
   flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
-  background: var(--busy-color); color: #fff; font-size: 11px; font-weight: 700;
+  background: var(--danger-color); color: #fff; font-size: 11px; font-weight: 700;
   display: flex; align-items: center; justify-content: center;
 }
 
@@ -2179,7 +2166,7 @@ nav { display: flex; flex-direction: column; gap: 8px; }
 }
 .event-del-btn:hover {
   transform: scale(1.15);
-  color: var(--busy-color);
+  color: var(--danger-color);
 }
 
 /* ===== Premium Edith View Improvements ===== */

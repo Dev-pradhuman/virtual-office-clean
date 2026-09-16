@@ -5,8 +5,6 @@ import { breathePhaseDelayMs, initPresenceTiming } from "@/lib/presence-timing";
 
 const PRESENCE_DESCRIPTIONS: Record<PresenceStatus, string> = {
   online: "Online — available for chat and calls",
-  away: "Away — stepped out, notifications are delayed",
-  busy: "Busy — do not disturb",
   offline: "Offline — not connected right now",
 };
 
@@ -25,14 +23,7 @@ export function PresenceDot({
   ring?: boolean;
   showTooltip?: boolean;
 }) {
-  const cssVar =
-    status === "online"
-      ? "var(--presence-online)"
-      : status === "away"
-        ? "var(--presence-away)"
-        : status === "busy"
-          ? "var(--presence-busy)"
-          : "var(--presence-offline)";
+  const cssVar = status === "online" ? "var(--presence-online)" : "var(--presence-offline)";
 
   // Pulse-then-settle on status change (skip first mount).
   const prev = useRef<PresenceStatus | null>(null);
@@ -108,8 +99,6 @@ export function PresenceDot({
 
 const PRESENCE_LABELS: Record<PresenceStatus, string> = {
   online: "Online",
-  away: "Away",
-  busy: "Busy",
   offline: "Offline",
 };
 
@@ -125,7 +114,7 @@ export function PresenceLegend({
   className?: string;
   orientation?: "horizontal" | "vertical";
 }) {
-  const statuses: PresenceStatus[] = ["online", "away", "busy", "offline"];
+  const statuses: PresenceStatus[] = ["online", "offline"];
   return (
     <div
       role="list"

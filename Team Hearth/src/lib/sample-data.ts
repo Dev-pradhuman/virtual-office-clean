@@ -1,4 +1,4 @@
-export type PresenceStatus = "online" | "away" | "busy" | "offline";
+export type PresenceStatus = "online" | "offline";
 
 export type Role = "admin" | "member";
 
@@ -79,7 +79,7 @@ export const SAMPLE_USERS: TeamUser[] = [
     designation: "Product Engineer",
     initials: "AV",
     color: "#10b981",
-    status: "busy",
+    status: "online",
     statusMessage: "In a meeting",
     inCall: true,
     role: "member",
@@ -94,7 +94,7 @@ export const SAMPLE_USERS: TeamUser[] = [
     designation: "Design Lead",
     initials: "PS",
     color: "#f59e0b",
-    status: "away",
+    status: "online",
     statusMessage: "Focus mode — back at 3pm",
     inCall: false,
     role: "member",
@@ -120,7 +120,7 @@ export const SAMPLE_MESSAGES: ChatMessage[] = [
     authorId: "u2",
     timestamp: "10:15 AM",
     content:
-      "Just looked. The presence dots feel calm — exactly what we want. One nit: let's use amber for 'away', not orange.",
+      "Just looked. The presence dots feel calm — exactly what we want. The online signal reads clearly across the office.",
     attachment: { name: "presence-dots-v3.fig", size: "2.4 MB" },
     reactions: [{ emoji: "👍", count: 2 }, { emoji: "🎯", count: 1 }],
     attachmentPreview: { kind: "image", label: "presence-dots-v3.fig" },
@@ -415,7 +415,7 @@ export const SAMPLE_AUDIT: AuditEntry[] = [
   { id: "a2", actorId: "u2", action: "Assigned task", target: "Define API contract", timestamp: "Today · 09:15 AM" },
   { id: "a3", actorId: "u1", action: "Changed shared backdrop", target: "Aurora mesh", timestamp: "Yesterday · 6:22 PM" },
   { id: "a4", actorId: "u3", action: "Uploaded file", target: "presence-dots-v3.fig", timestamp: "Yesterday · 2:04 PM" },
-  { id: "a5", actorId: "u1", action: "Rotated quit password", target: "App config", timestamp: "Oct 06 · 5:12 PM" },
+  { id: "a5", actorId: "u1", action: "Updated user permissions", target: "Team access", timestamp: "Oct 06 · 5:12 PM" },
   { id: "a6", actorId: "u2", action: "Joined call", target: "Sprint planning", timestamp: "Oct 05 · 2:00 PM" },
 ];
 

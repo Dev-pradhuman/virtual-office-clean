@@ -102,7 +102,6 @@ export interface AdminConfig {
   googleDriveApiKey: string;
   googleDriveClientId: string;
   googleDriveConnected: boolean;
-  quitPassword: string;
   updateChannel: UpdateChannel;
 }
 
@@ -112,7 +111,6 @@ export const DEFAULT_ADMIN_CONFIG: AdminConfig = {
   googleDriveApiKey: "",
   googleDriveClientId: "",
   googleDriveConnected: false,
-  quitPassword: "",
   updateChannel: "stable",
 };
 
@@ -154,6 +152,10 @@ interface AppContextValue {
   // what desktop apps/windows they have open (Electron clients report these).
   userActivity: Record<string, { view: string; label: string }>;
   userApps: Record<string, string[]>;
+  canTurnOffVirtualOffice: boolean;
+  adminUserPermissions: Record<string, boolean>;
+  setUserShutdownPermission: (userId: string, granted: boolean) => Promise<void>;
+  turnOffVirtualOffice: () => Promise<void>;
   login: (username: string, password: string, hq: string) => Promise<void>;
   logout: () => void;
   setActiveView: (v: ActiveView) => void;
@@ -174,7 +176,6 @@ interface AppContextValue {
   uploadFile: (file: File) => Promise<void>;
   deleteFile: (id: string) => Promise<void>;
   updateStatus: (message: string) => void;
-  setPresence: (status: TeamUser["status"]) => void;
 }
 
 // Built-in "who's online" backdrops (committed under public/backdrops), keyed by
@@ -226,6 +227,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [files, setFiles] = useState<TeamFile[]>([]);
   const [prefs, setPrefsState] = useState<UserPreferences>(DEFAULT_PREFS);
   const [adminConfig, setAdminConfigState] = useState<AdminConfig>(DEFAULT_ADMIN_CONFIG);
+  const [canTurnOffVirtualOffice, setCanTurnOffVirtualOffice] = useState(false);
+  const [adminUserPermissions, setAdminUserPermissions] = useState<Record<string, boolean>>({});
   const [activeView, setActiveView] = useState<ActiveView>("office");
   const [activeChannel, setActiveChannelState] = useState("general");
   const [customizeOpen, setCustomizeOpen] = useState(false);
@@ -247,7 +250,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // lazily load a channel's history on first visit.
   const loadChannelMessagesRef = useRef<((channel: string) => Promise<void>) | null>(null);
   const [, forceSocket] = useState(0);
-  const myStatusRef = useRef<TeamUser["status"]>("online");
   const myStatusMsgRef = useRef<string>("");
 
   // Hydrate session + prefs + admin from localStorage on client
@@ -262,7 +264,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (pRaw) setPrefsState({ ...DEFAULT_PREFS, ...JSON.parse(pRaw) });
       }
       const aRaw = localStorage.getItem(ADMIN_KEY);
-      if (aRaw) setAdminConfigState({ ...DEFAULT_ADMIN_CONFIG, ...JSON.parse(aRaw) });
+      if (aRaw) {
+        const saved = JSON.parse(aRaw);
+        delete saved.quitPassword;
+        setAdminConfigState({ ...DEFAULT_ADMIN_CONFIG, ...saved });
+      }
     } catch {}
   }, []);
 
@@ -325,8 +331,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const rows = await apiFetch<BackendUser[]>("/api/users");
         if (!cancelled) setUsers(rows.map(toTeamUser));
+        if (rows.find((u) => u.id === currentUserId)?.role === "admin") {
+          const grants = await apiFetch<{ user_id: number; permission_key: string }[]>("/api/admin/user-permissions");
+          if (!cancelled) setAdminUserPermissions(Object.fromEntries(
+            grants.filter((g) => g.permission_key === "can_turn_off_v_office").map((g) => [String(g.user_id), true]),
+          ));
+        }
       } catch (e) {
         console.error("[vo] failed to load users", e);
+      }
+    };
+    const loadMyPermissions = async () => {
+      try {
+        const grants = await apiFetch<{ can_turn_off_v_office: boolean }>("/api/me/permissions");
+        if (!cancelled) setCanTurnOffVirtualOffice(!!grants.can_turn_off_v_office);
+      } catch (e) {
+        if (!cancelled) setCanTurnOffVirtualOffice(false);
       }
     };
     const loadChannelMessages = async (channel: string) => {
@@ -428,7 +448,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionId: sid,
         deviceId: getDeviceId(),
         appVersion: "1.0.0",
-        status: myStatusRef.current,
         timestamp: Date.now(),
         stats,
       });
@@ -443,6 +462,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setConnected(true);
       loadUsers();
+      loadMyPermissions();
       // Reload every channel we've already opened (general on first connect).
       loadedChannelsRef.current.add("general");
       loadedChannelsRef.current.forEach((c) => loadChannelMessages(c));
@@ -506,10 +526,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             u.id === String(d.id)
               ? {
                   ...u,
-                  status:
-                    d.status === "online" || d.status === "away" || d.status === "busy"
-                      ? d.status
-                      : "offline",
+                  status: d.status ? (d.status === "online" ? "online" : "offline") : u.status,
                   statusMessage: d.message ?? u.statusMessage,
                 }
               : u,
@@ -517,6 +534,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         );
       },
     );
+    sock.on("user_permission_changed", () => {
+      loadMyPermissions();
+      loadUsers();
+    });
     sock.on("user_activity", (d: { id: number; view?: string; label?: string }) => {
       setUsers((us) =>
         us.map((u) => (u.id === String(d.id) ? { ...u, currentApp: d.label || undefined } : u)),
@@ -654,7 +675,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // shared image > default artwork. Matches the legacy client's keying.
   const officeBackdrop = useMemo(() => {
     const key = users
-      .filter((u) => u.status === "online" || u.status === "away" || u.status === "busy")
+      .filter((u) => u.status === "online")
       .map((u) => u.name)
       .sort()
       .join("|");
@@ -682,6 +703,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       socketRef.current?.emit("client_graceful_exit");
     } catch {}
+    const desktop = (window as unknown as { electronAPI?: { clearDesktopAuth?: () => Promise<boolean> } }).electronAPI;
+    desktop?.clearDesktopAuth?.().catch(() => {});
     setToken(null);
     setSession(null);
     setUsers([]);
@@ -696,6 +719,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFiles([]);
     setUserActivity({});
     setUserApps({});
+    setCanTurnOffVirtualOffice(false);
+    setAdminUserPermissions({});
     loadedChannelsRef.current = new Set();
     try {
       localStorage.removeItem(SESSION_KEY);
@@ -815,20 +840,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await apiFetch(`/api/files/${id}`, { method: "DELETE" });
   }, []);
 
-  const setPresence = useCallback((status: TeamUser["status"]) => {
-    myStatusRef.current = status;
-    socketRef.current?.emit("set_status", { status, message: myStatusMsgRef.current });
-    setUsers((us) =>
-      us.map((u) => (session && u.id === session.userId ? { ...u, status } : u)),
-    );
-  }, [session]);
-
   const updateStatus = useCallback((message: string) => {
     myStatusMsgRef.current = message;
-    socketRef.current?.emit("set_status", { status: myStatusRef.current, message });
+    socketRef.current?.emit("set_status_message", { message });
     setUsers((us) =>
       us.map((u) => (session && u.id === session.userId ? { ...u, statusMessage: message } : u)),
     );
+  }, [session]);
+
+  const setUserShutdownPermission = useCallback(async (userId: string, granted: boolean) => {
+    await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}/permissions/can_turn_off_v_office`, {
+      method: "PUT",
+      body: JSON.stringify({ granted }),
+    });
+    setAdminUserPermissions((prev) => ({ ...prev, [userId]: granted }));
+  }, []);
+
+  const turnOffVirtualOffice = useCallback(async () => {
+    const token = getToken();
+    const api = (window as unknown as { electronAPI?: { turnOffVirtualOffice?: () => Promise<{ success: boolean; error?: string }> } }).electronAPI;
+    if (!token || !session || !api?.turnOffVirtualOffice) throw new Error("Turn Off Virtual Office is available in the desktop app after sign-in.");
+    const result = await api.turnOffVirtualOffice();
+    if (!result.success) throw new Error(result.error || "Shutdown permission denied");
+    const liveSocket = socketRef.current;
+    if (liveSocket?.connected) {
+      try { await liveSocket.timeout(1000).emitWithAck("client_graceful_exit"); } catch (e) {}
+      liveSocket.disconnect();
+    }
   }, [session]);
 
   const value: AppContextValue = {
@@ -852,6 +890,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     officeBackdrop,
     userActivity,
     userApps,
+    canTurnOffVirtualOffice,
+    adminUserPermissions,
+    setUserShutdownPermission,
+    turnOffVirtualOffice,
     login,
     logout,
     setActiveView,
@@ -872,7 +914,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     uploadFile,
     deleteFile,
     updateStatus,
-    setPresence,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

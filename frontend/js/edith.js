@@ -338,7 +338,7 @@
     
     // Access global variables from app.js directly (since ES6 let doesn't attach to window)
     const currentUsersList = typeof users !== 'undefined' ? users : [];
-    const activeUsers = currentUsersList.filter(u => u.status === 'online' || u.status === 'away' || u.status === 'busy');
+    const activeUsers = currentUsersList.filter(u => u.status === 'online');
     const localCurrentUser = typeof currentUser !== 'undefined' ? currentUser : null;
 
     // 1. Teammates Work / Activity Summary (Refined Conversational Paragraphs)

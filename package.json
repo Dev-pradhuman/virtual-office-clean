@@ -8,6 +8,7 @@
     "start": "electron . --no-sandbox",
     "dev": "electron . --no-sandbox",
     "start:server": "node server-only.js",
+    "test": "node --test tests/*.test.js",
     "build:frontend": "npm --prefix \"Team Hearth\" run build",
     "build:win": "npm run build:frontend && electron-builder --win",
     "build:linux": "npm run build:frontend && electron-builder --linux",

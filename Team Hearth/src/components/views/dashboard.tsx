@@ -19,7 +19,7 @@ export function DashboardView() {
     currentUser,
     setActiveView,
   } = useApp();
-  const online = users.filter((u) => u.status !== "offline").length;
+  const online = users.filter((u) => u.status === "online").length;
 
   return (
     <div className="h-full flex flex-col relative">

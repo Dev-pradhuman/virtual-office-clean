@@ -149,6 +149,15 @@ export async function loginRequest(
 ): Promise<{ token: string; user: BackendUser }> {
   // Persist the HQ address first so getApiBase() targets the right server.
   setHqAddress(hq);
+  const desktop = (window as unknown as {
+    electronAPI?: { authenticateHeadquarters?: (username: string, password: string, hq: string) => Promise<{ success: boolean; token?: string; user?: BackendUser; error?: string }> };
+  }).electronAPI;
+  if (desktop?.authenticateHeadquarters) {
+    const result = await desktop.authenticateHeadquarters(username, password, hq);
+    if (!result.success || !result.token || !result.user) throw new Error(result.error || "Invalid credentials");
+    setToken(result.token);
+    return { token: result.token, user: result.user };
+  }
   const res = await fetch(`${getApiBase()}/api/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -193,7 +202,7 @@ export function initialsFor(name: string): string {
 
 // Backend statuses include 'closed'/'disconnected' which the UI treats as offline.
 export function normalizeStatus(s?: string): PresenceStatus {
-  if (s === "online" || s === "away" || s === "busy") return s;
+  if (s === "online") return s;
   return "offline";
 }
 

@@ -38,13 +38,13 @@ The app is designed to ensure you never miss an office call or chat.
 
 ## 3. How to Completely Quit
 
-Because of the watchdog, you cannot simply "kill" the app from the terminal or a task manager (it will just forcefully reopen). 
+The background watchdog may reopen the app after an unexpected process failure. The device owner can still stop recovery through normal OS administration or uninstall the app.
 
-To completely quit the application:
-1. Find the Virtual Office icon in your system tray (bottom or top bar of your screen).
-2. Right-click the icon and select **Quit**.
-3. You will be prompted to enter the administrator quit password.
-4. Once you quit legitimately, the watchdog script is signaled to stop and will safely exit without relaunching the app.
+To turn Virtual Office off completely, open **Settings → My Preferences → Turn Off Virtual Office**.
+This action appears only if the administrator has granted your account the
+`can_turn_off_v_office` permission. It ends your session and keeps the client
+off through restarts until you manually open it again. Closing the window
+only moves the running app to the system tray.
 
 ---
 

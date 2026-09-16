@@ -197,15 +197,19 @@ function setupSocket(server, db, JWT_SECRET, SERVER_ID) {
       io.emit('user_apps', { id: socket.user.id, apps });
     });
 
-    socket.on('client_graceful_exit', () => {
+    socket.on('client_graceful_exit', (ack) => {
       socket.isGracefulExit = true;
       if (socket.sessionId) {
-        db.run("UPDATE sessions SET ended_at = CURRENT_TIMESTAMP, exit_status = 'graceful', exit_reason = 'Application closed normally' WHERE id = ?", [socket.sessionId]);
+        db.run("UPDATE sessions SET ended_at = CURRENT_TIMESTAMP, exit_status = 'graceful', exit_reason = 'Application closed normally' WHERE id = ?", [socket.sessionId], () => {
+          if (typeof ack === 'function') ack({ ok: true });
+        });
+      } else if (typeof ack === 'function') {
+        ack({ ok: true });
       }
     });
 
     socket.on('report_unexpected_termination', (data) => {
-      const targetUserId = data && data.userId ? Number(data.userId) : socket.user.id;
+      const targetUserId = socket.user.id;
       const targetDeviceId = data && data.deviceId ? data.deviceId : socket.deviceId;
       const targetAppVersion = data && data.appVersion ? data.appVersion : socket.appVersion;
 
@@ -247,15 +251,6 @@ function setupSocket(server, db, JWT_SECRET, SERVER_ID) {
       // Echo back timestamp to calculate ping RTT
       socket.emit('heartbeat_ack', { timestamp: data.timestamp });
       
-      const status = (data && data.status) || 'online';
-      if (status === 'away') {
-        const lastAct = userActivity.get(socket.user.id);
-        if (!lastAct || lastAct.view !== 'idle') {
-          userActivity.set(socket.user.id, { view: 'idle', label: 'Idle' });
-          io.emit('user_activity', { id: socket.user.id, view: 'idle', label: 'Idle' });
-          logStatusTransition(socket.user.id, 'idle', 'System idle detected via client heartbeat', socket.deviceId, socket.appVersion);
-        }
-      }
     });
 
     socket.on('disconnect', () => {
@@ -296,21 +291,22 @@ function setupSocket(server, db, JWT_SECRET, SERVER_ID) {
         broadcastCallRoster();
       }
 
-      const finalStatus = socket.isGracefulExit ? 'closed' : 'disconnected';
+      const finalStatus = 'offline';
+      const auditStatus = socket.isGracefulExit ? 'closed' : 'disconnected';
       const transitionReason = socket.isGracefulExit 
-        ? 'Application closed normally (exit password verified)' 
+        ? 'Application closed normally'
         : 'Lost connection unexpectedly (heartbeat timeout / network lost)';
 
       db.run("UPDATE users SET status = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?", [finalStatus, socket.user.id], () => {
         io.emit('user_status_change', { id: socket.user.id, status: finalStatus, last_seen: new Date() });
-        logStatusTransition(socket.user.id, finalStatus, transitionReason, socket.deviceId, socket.appVersion);
+        logStatusTransition(socket.user.id, auditStatus, transitionReason, socket.deviceId, socket.appVersion);
       });
     });
 
-    socket.on('set_status', (data) => {
-      db.run("UPDATE users SET status = ?, status_message = ? WHERE id = ?", [data.status, data.message, socket.user.id], () => {
-        io.emit('user_status_change', { id: socket.user.id, status: data.status, message: data.message });
-        logStatusTransition(socket.user.id, data.status, `User set status manually to ${data.status} with message: ${data.message || 'none'}`, socket.deviceId, socket.appVersion);
+    socket.on('set_status_message', (data) => {
+      const message = data && typeof data.message === 'string' ? data.message.trim().slice(0, 240) : '';
+      db.run("UPDATE users SET status_message = ? WHERE id = ?", [message, socket.user.id], () => {
+        io.emit('user_status_change', { id: socket.user.id, message });
       });
     });
 

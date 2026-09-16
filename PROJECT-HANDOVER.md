@@ -33,7 +33,7 @@ if you set `TURSO_DATABASE_URL` (so data survives Render's per-deploy disk wipes
 ## Login & staying signed in
 
 - Log in once with username/password. The server checks the bcrypt hash and returns a **JWT valid for 365 days**.
-- On desktop, that token is **encrypted with the OS keychain** (Electron `safeStorage`) and saved to `userData/vo_config.json`, so future launches **auto-login** silently until you sign out.
+- Electron authenticates against the selected Headquarters and stores that token and address in `userData/vo-desktop-auth.json`, encrypted with `safeStorage` when available. The renderer also keeps its session for auto-login until sign-out.
 - Login is **rate-limited** (20 attempts / 15 min per IP).
 - The server URL you entered is saved, so the app reconnects to the same Headquarters each time.
 
@@ -42,14 +42,12 @@ if you set `TURSO_DATABASE_URL` (so data survives Render's per-deploy disk wipes
 The most engineered part. It tracks not just "online/offline" but a rich picture
 of who's around and what they're doing.
 
-**Status states:** online, away, busy, offline, plus "closed" (quit normally) vs
-"disconnected" (lost connection). You can set your status manually with a custom message.
+**User presence states:** Online and Offline. Graceful close, crash, and network loss remain internal session/audit reasons. Users can set a custom status message without changing connection presence.
 
 **How it stays accurate:**
 - Every socket connection creates a **session row** in the DB. A user is online if *any* of their connections is alive — so a second window or the pop-out chat doesn't make you flicker.
 - The client sends a **heartbeat every 30 seconds** carrying live telemetry: CPU %, RAM %, OS, and network quality (from socket round-trip ping — Excellent/Good/Fair/Poor).
 - The server runs a **sweeper every 30s**: any session whose last heartbeat is older than 90 seconds is closed, and if the user has no other live sessions they're marked offline. This catches crashes and network drops that never sent a clean disconnect.
-- **Idle detection:** when inactive, the client reports "away" and the server logs an idle transition.
 - **Graceful vs unexpected exit:** a normal close is recorded as graceful; a crash/kill as unexpected, and on next launch the app reports the previous run ended abnormally.
 
 **"What is everyone working on":** each client broadcasts which in-app view it's on
@@ -122,18 +120,18 @@ One user is admin via the `ADMIN_USERNAME` env var (nobody is admin by default).
 Admins get an in-app **Settings** panel members don't see:
 
 - **Google Drive keys** — stored server-side in `runtime-config.json`, never sent to browsers; includes a "Test Connection" button.
-- **Quit password** — required to actually close the app.
+- **User permissions** — the admin assigns `can_turn_off_v_office` per user.
 - **Update channel** for the auto-updater.
 - **Analytics dashboard** — live sessions with CPU/RAM/OS/network per user.
-- **Audit log** — full presence status-history (every online/away/idle/disconnect transition with device + reason).
+- **Audit log** — full presence status-history (online/offline and connection/audit transitions with device + reason).
 
 ## Desktop behavior & persistence
 
 - **System tray**: closing the window minimizes to the tray; the app keeps running. Left/double-click the tray icon to reopen.
 - **Run at login**: auto-starts (hidden in the tray) on Windows/macOS login.
 - **Auto-updater**: checks GitHub Releases and self-updates.
-- **Quit-password gate**: quitting requires the admin quit password (default `office_admin_exit_pass`) — by design for an always-on presence client.
-- **Persistence watchdog**: a small detached process watches the app; if it's **force-killed** (Task Manager "End task", crash, power loss), it **relaunches ~1 second later**. A legitimate password-gated quit writes a stop-flag first so the watchdog does *not* relaunch. Packaged builds only (off during `npm start` dev).
+- **Intentional shutdown**: only a user with `can_turn_off_v_office` may turn the desktop client off; the main process verifies permission against Headquarters.
+- **Persistence watchdog**: packaged builds recover from unexpected process failure. An authorized shutdown writes a persistent intent marker, stops recovery, and disables autostart until a visible manual launch.
 
 ## Reliability touches
 
@@ -170,19 +168,18 @@ Render backend.
 | Real-time / signaling | Socket.IO (`backend/socket.js`) |
 | P2P media | WebRTC — two independent meshes (screen share + call) |
 | Database | SQLite (`sqlite3`); optional **Turso/libSQL** for persistence on Render |
-| Frontend | Vanilla HTML/CSS/JS — **no framework, no build step** |
+| Frontend | React/Vite in `Team Hearth`; vanilla `frontend/` is the fallback |
 | 3D scene | Three.js (vendored under `frontend/vendor/`) |
 | Auth | JWT (365-day tokens) + bcrypt |
 | Native input (remote control) | `@nut-tree-fork/nut-js` (optional dependency) |
 | Packaging | electron-builder (nsis/portable/AppImage/deb/rpm/dmg) |
 
-No TypeScript, no bundler, no test suite. Frontend files load directly via
-`<script>` tags in `frontend/index.html`.
+The active build is served from `Team Hearth/dist` when present. Otherwise the backend serves `frontend/index.html` and its legacy script tags.
 
 ## 3. Repository layout
 
 ```
-main.js                 Electron main — window, tray, IPC, autostart, quit-password
+main.js                 Electron main — window, tray, IPC, autostart, permission-checked shutdown
                         gate, persistence watchdog, native input, desktop-source
                         picker, telemetry.
 preload.js              contextBridge — exposes a safe electronAPI to the renderer.
@@ -191,7 +188,7 @@ auth_setup.js           One-time Google Drive OAuth refresh-token helper.
 updater.js              electron-updater wiring.
 generate-icons.js       Icon generation helper.
 render.yaml             Render deployment descriptor.
-office.db               (checked-in SQLite file — see Known Issues)
+office.db               Local SQLite data (gitignored).
 
 backend/
   server.js             Express REST API, auth/admin middleware, rate limiting,
@@ -202,7 +199,10 @@ backend/
   database.js           Schema + idempotent migrations + seed; sqlite3 OR a libSQL
                         adapter that mimics the sqlite3 run/get/all API.
   config-store.js       Server-side runtime secrets (runtime-config.json): Google
-                        Drive keys, quit password, update channel.
+                        Drive keys and update channel.
+  permissions.js        Reusable per-user permission lookup and supported keys.
+
+Team Hearth/            React/Vite desktop renderer, built into dist/.
 
 frontend/
   index.html            App shell (all views + all script includes).
@@ -272,7 +272,7 @@ only contains `id` + `username`** — not `role` or `avatar`. Admin routes use t
 - `GET/POST /api/projects`, `DELETE /api/projects/:id` (auth).
 - `GET/POST /api/events`, `DELETE /api/events/:id` (auth).
 - `GET  /api/whiteboard` (auth) — saved strokes.
-- `GET/POST /api/admin/config`, `POST /api/admin/config/test` (auth + **admin**) — Drive keys / quit password / update channel.
+- `GET/POST /api/admin/config`, `POST /api/admin/config/test` (auth + **admin**) — Drive keys / update channel.
 - `GET  /api/admin/audit-log` (auth + **admin**).
 - `GET  /api/admin/analytics` (auth + **admin**) — live sessions + recent status logs.
 - `GET  /api/download-app` (no auth) — redirects to a GitHub Releases page.
@@ -288,7 +288,7 @@ affect presence and can only send/receive chat.
 
 **Presence / session**
 - server→client: `user_status_change`, `user_activity`, `user_apps`, `user_control_support`, `activity_snapshot`, `apps_snapshot`, `control_support_snapshot`, `session_created`, `heartbeat_ack`.
-- client→server: `heartbeat` (validated against socket identity), `activity_update`, `apps_update`, `set_status`, `profile_update`, `client_graceful_exit`, `report_unexpected_termination`.
+- client→server: `heartbeat` (validated against socket identity), `activity_update`, `apps_update`, `set_status_message`, `profile_update`, `client_graceful_exit`, `report_unexpected_termination`.
 
 **Chat**
 - `send_message` (client→server); `new_message` (server→client). `recipient_id` NULL = team, else DM.
@@ -318,14 +318,15 @@ whose `last_heartbeat` is older than 90s and marks users offline.
 - `ADMIN_USERNAME` — promotes that user to `admin`.
 - `TURN_SERVERS` (JSON array) **or** `TURN_URL`+`TURN_USERNAME`+`TURN_PASSWORD` — TURN config; falls back to free openrelay.
 - `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` — enable Turso persistence.
-- `QUIT_PASSWORD` — overrides the default quit password.
 
-Admin-set secrets (Google Drive keys, quit password, update channel) live in a
+Admin-set settings (Google Drive keys and update channel) live in a
 **server-side** `runtime-config.json` via `backend/config-store.js` — never sent
 to the browser. Members hold no secrets.
 
-Client-side per-machine config (encrypted token, server URL, UI prefs) lives in
-`userData/vo_config.json`, encrypted via Electron `safeStorage` (OS keychain).
+Electron's verified Headquarters session lives in `userData/vo-desktop-auth.json`
+with `safeStorage` encryption when available. The legacy renderer also stores
+its local machine settings in `userData/vo_config.json`; the React renderer
+stores its UI session and preferences locally.
 
 ## 8. Running & building
 
@@ -344,28 +345,27 @@ npm run build:linux          # Linux AppImage/deb/rpm
 Node 18+. After a major Electron upgrade, rebuild native modules:
 `npx electron-rebuild -f`. Default login: seeded users with `password123`.
 
-## 9. Persistence watchdog (read before touching quit logic)
+## 9. Presence and intentional shutdown
 
-The app is designed to stay running: closing the window minimizes to tray, and a
-real quit is gated behind an **admin quit password** (default
-`office_admin_exit_pass`, overridable via `QUIT_PASSWORD` env or the admin
-Settings panel). On top of that, a **detached watchdog** (in `main.js`) restarts
-the app if it's **force-killed** (Task Manager "End task", crash, power loss):
+The client stays Online while its primary Socket.IO connection and heartbeat session
+are alive. Closing the desktop window hides it in the tray. Disconnect, crash, and
+heartbeat timeout make the user Offline when no other live session remains;
+the reason is retained in session and audit records.
 
-- On launch, `startWatchdog()` writes a tiny Node script to `userData/vo-watchdog.js` and spawns it detached (the Electron binary in `ELECTRON_RUN_AS_NODE` mode), passing the app PID, a stop-flag path, and a relaunch spec.
-- The watchdog polls the PID every 1s. If the app dies **without** a stop-flag, it waits ~1s and relaunches it.
-- A legitimate quit calls `writeStopFlag()` (in `requestQuit()` and on `session-end`), so the watchdog exits and does **not** relaunch. Fresh launch calls `clearStopFlag()`.
-- **Gated to packaged builds** (`app.isPackaged`); set `VO_FORCE_WATCHDOG=1` to test in dev. It is intentionally **off during `npm start`**.
-- Stop-flag file: `userData/vo-watchdog.stop`. Deleting/creating it manually is the escape hatch if the watchdog is ever stuck.
-- Only the **primary** single-instance owns a watchdog (guarded against relaunch loops).
+The administrator manages `can_turn_off_v_office` for each user through Settings.
+The permission is stored in `user_permissions`, separate from Admin/Member roles.
+Electron performs desktop login itself and pins the authenticated token and
+Headquarters address. On full exit it sends that stored Bearer token to
+`/api/desktop/shutdown-authorization`; renderer-supplied tokens or addresses
+cannot authorize shutdown.
+Only a granted user gets the **Turn Off Virtual Office** action. It emits a
+graceful-exit event, disconnects, writes `userData/vo-intentional-shutdown.json`
+and `userData/vo-watchdog.stop`, disables login autostart, and exits.
 
-The only clean way to fully exit is **tray → Quit → enter the quit password**.
-Verified in isolation: relaunches on dead PID with no stop-flag; does not relaunch
-when the stop-flag is present.
-
-> Deployment note: this makes the client resistant to being closed by whoever runs
-> it, so it should only be distributed to a team that has agreed to run an
-> always-on presence client (the quit-password model already implied this).
+Packaged builds still use the detached watchdog and OS keep-alive task for
+unexpected failures. Both respect the intentional-shutdown marker. Hidden
+autostart launches respect it too. A visible manual launch clears the marker
+and stop flag, rearms recovery, and restores normal autostart.
 
 ## 10. Recent bug fixes
 
@@ -390,7 +390,7 @@ takes effect after users re-login, which is why the fixes stayed server-side.
 - **Calendar is local-only** (an `events` table); no Google/Outlook integration.
 - **Edith is rule-based**, not connected to any LLM.
 - **Whiteboard strokes grow unbounded** (row per stroke, replayed on load).
-- **`office.db` is checked into the repo** and `dist/`/`dist-new/` build outputs are present — should be gitignored/cleaned.
+- **Runtime and build artifacts** are gitignored in the cleaned source repository; generated local files still need normal operational cleanup.
 - **Docs drift:** the README's project layout omits `call.js` and `edith.js`.
 - **Migrations** are repeated `ALTER TABLE ... catch()` at boot — pragmatic but unversioned/fragile.
 

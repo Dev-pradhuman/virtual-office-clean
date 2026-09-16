@@ -13,7 +13,7 @@ import { SAMPLE_AUDIT } from "@/lib/sample-data";
 import { Avatar, Card } from "../ui-bits";
 import { ViewHeader } from "./_header";
 import { cn } from "@/lib/utils";
-import { LogOut, User2, ShieldCheck, Save } from "lucide-react";
+import { LogOut, User2, ShieldCheck, Save, Power } from "lucide-react";
 
 type Tab = "me" | "admin";
 
@@ -88,13 +88,32 @@ function TabButton({
 /* ---------------------- My Preferences ---------------------- */
 
 function MyPreferences() {
-  const { currentUser, prefs, setPrefs, updateStatus, logout } = useApp();
+  const { currentUser, prefs, setPrefs, updateStatus, logout, canTurnOffVirtualOffice, turnOffVirtualOffice } = useApp();
   const [name, setName] = useState(currentUser?.name ?? "");
   const [designation, setDesignation] = useState(currentUser?.designation ?? "");
   const [statusMsg, setStatusMsg] = useState(currentUser?.statusMessage ?? "");
+  const [shutdownError, setShutdownError] = useState("");
+  const [shuttingDown, setShuttingDown] = useState(false);
 
   return (
     <div className="space-y-5">
+      {canTurnOffVirtualOffice && !!(window as unknown as { electronAPI?: unknown }).electronAPI && (
+        <SectionCard title="Turn Off Virtual Office" description="End your session and keep the desktop app off until you open it manually again.">
+          <button
+            disabled={shuttingDown}
+            onClick={async () => {
+              setShutdownError("");
+              setShuttingDown(true);
+              try { await turnOffVirtualOffice(); }
+              catch (e) { setShutdownError(e instanceof Error ? e.message : "Could not turn off Virtual Office"); setShuttingDown(false); }
+            }}
+            className="inline-flex items-center gap-2 rounded-md bg-brand px-3 py-2 text-xs font-semibold text-brand-foreground disabled:opacity-50"
+          >
+            <Power className="size-3.5" /> Turn Off Virtual Office
+          </button>
+          {shutdownError && <p className="mt-2 text-xs text-red-500">{shutdownError}</p>}
+        </SectionCard>
+      )}
       <SectionCard title="Profile" description="Visible to your teammates.">
         <div className="flex items-center gap-4 mb-5">
           <Avatar user={currentUser!} size={64} showStatus />
@@ -325,7 +344,9 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (c: boolean
 /* ---------------------- Admin Settings ---------------------- */
 
 function AdminSettings() {
-  const { adminConfig, setAdminConfig, users } = useApp();
+  const { adminConfig, setAdminConfig, users, adminUserPermissions, setUserShutdownPermission } = useApp();
+  const [permissionError, setPermissionError] = useState("");
+  const [permissionSaving, setPermissionSaving] = useState<string | null>(null);
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5 text-xs">
@@ -397,14 +418,30 @@ function AdminSettings() {
         </label>
       </SectionCard>
 
-      <SectionCard title="Quit password" description="Required to close the desktop app.">
-        <Field
-          label="Quit password"
-          value={adminConfig.quitPassword}
-          onChange={(v) => setAdminConfig({ quitPassword: v })}
-          type="password"
-          placeholder="Set a strong password"
-        />
+      <SectionCard title="User permissions" description="Choose who may turn off the desktop app completely. Closing a window always keeps the office running in the tray.">
+        <div className="divide-y divide-border/60 rounded-lg border border-border">
+          {users.map((u) => (
+            <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar user={u} size={24} />
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-semibold">{u.name}</div>
+                  <div className="text-[10px] text-muted-foreground">Can turn off V-Office</div>
+                </div>
+              </div>
+              <div className={permissionSaving === u.id ? "pointer-events-none opacity-50" : ""}>
+                <Switch checked={!!adminUserPermissions[u.id]} onChange={async (granted) => {
+                  setPermissionError("");
+                  setPermissionSaving(u.id);
+                  try { await setUserShutdownPermission(u.id, granted); }
+                  catch (e) { setPermissionError(e instanceof Error ? e.message : "Permission update failed"); }
+                  finally { setPermissionSaving(null); }
+                }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        {permissionError && <p className="mt-2 text-xs text-red-500">{permissionError}</p>}
       </SectionCard>
 
       <SectionCard title="Update channel">

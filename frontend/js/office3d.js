@@ -313,7 +313,7 @@ function update(users) {
 
   users.forEach(u => {
     const desk = desks.get(u.id);
-    if (desk) applyState(desk, u.status === 'online' || u.status === 'away' || u.status === 'busy');
+    if (desk) applyState(desk, u.status === 'online');
   });
 
   resize();

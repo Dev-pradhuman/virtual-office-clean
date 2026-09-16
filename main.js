@@ -46,19 +46,47 @@ const isDev = !app.isPackaged;
 const startHidden = process.argv.includes('--hidden');
 const configStore = require('./backend/config-store');
 
-// Set gracefulExit to false immediately for this run to monitor unexpected shutdowns
-configStore.writeConfig({ gracefulExit: false });
+const intentionalShutdownPath = () => path.join(app.getPath('userData'), 'vo-intentional-shutdown.json');
+const desktopAuthPath = () => path.join(app.getPath('userData'), 'vo-desktop-auth.json');
+const hasIntentionalShutdown = () => fs.existsSync(intentionalShutdownPath());
+function clearIntentionalShutdown() {
+  try { if (hasIntentionalShutdown()) fs.unlinkSync(intentionalShutdownPath()); } catch (e) {}
+}
 
-let authenticatedToQuit = false;
+function headquartersOrigin(address) {
+  const url = new URL(address);
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('Invalid Headquarters Address');
+  }
+  return url.origin;
+}
+
+function saveDesktopAuth(auth) {
+  const serialized = JSON.stringify(auth);
+  const wrapped = safeStorage.isEncryptionAvailable()
+    ? { enc: safeStorage.encryptString(serialized).toString('base64') }
+    : { plain: serialized };
+  fs.writeFileSync(desktopAuthPath(), JSON.stringify(wrapped));
+}
+
+function readDesktopAuth() {
+  try {
+    const wrapped = JSON.parse(fs.readFileSync(desktopAuthPath(), 'utf8'));
+    if (wrapped.enc && safeStorage.isEncryptionAvailable()) {
+      return JSON.parse(safeStorage.decryptString(Buffer.from(wrapped.enc, 'base64')));
+    }
+    if (wrapped.plain) return JSON.parse(wrapped.plain);
+  } catch (e) {}
+  return null;
+}
 
 // --- Persistence watchdog ---------------------------------------------------
-// Keeps the app alive: if it's force-killed (Task Manager "End task", a crash,
-// or a power blip) it is relaunched ~1s later. A normal password-gated quit
-// writes a stop-flag first, so the watchdog exits quietly instead of relaunching.
+// Recovers from an unexpected app process failure. An intentional shutdown
+// writes a persistent marker and stop flag before the process exits.
 //
 // Enabled only in packaged builds by default (set VO_FORCE_WATCHDOG=1 to test in
 // dev) — otherwise it would respawn the app while you're developing with
-// `npm start` and you'd be unable to stop it without the quit password.
+// `npm start` while developing.
 const WATCHDOG_ENABLED = app.isPackaged || process.env.VO_FORCE_WATCHDOG === '1';
 
 // The watchdog runs as plain Node (via the Electron binary in RUN_AS_NODE mode).
@@ -69,6 +97,7 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const parentPid = parseInt(process.argv[2], 10);
 const stopFlag = process.argv[3];
+const intentMarker = process.argv[5];
 let spec = {};
 try { spec = JSON.parse(Buffer.from(process.argv[4] || '', 'base64').toString('utf8')); } catch (e) {}
 
@@ -77,7 +106,7 @@ function alive(pid) {
   try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
 }
 function stopRequested() {
-  try { return fs.existsSync(stopFlag); } catch (e) { return false; }
+  try { return fs.existsSync(stopFlag) || fs.existsSync(intentMarker); } catch (e) { return false; }
 }
 
 const timer = setInterval(function () {
@@ -128,7 +157,8 @@ function startWatchdog() {
       scriptPath,
       String(process.pid),
       stopFlagPath(),
-      Buffer.from(JSON.stringify(spec)).toString('base64')
+      Buffer.from(JSON.stringify(spec)).toString('base64'),
+      intentionalShutdownPath()
     ], {
       detached: true,
       stdio: 'ignore',
@@ -147,7 +177,7 @@ function startWatchdog() {
 // external supervisor can bring the app back. A per-user Scheduled Task —
 // triggered at logon and repeating every minute — does exactly that, and also
 // restores the app after a reboot. It launches the app ONLY when it isn't
-// already running and NOT when the user did a legitimate password-gated quit
+// already running and NOT when a permitted user intentionally turned it off
 // (the same stop-flag the watchdog honors), and it needs no admin rights.
 const KEEPALIVE_TASK = 'VirtualOfficeKeepAlive';
 const relauncherVbsPath = () => path.join(app.getPath('userData'), 'vo-relauncher.vbs');
@@ -158,11 +188,13 @@ function writeRelauncherVbs() {
   // wscript runs this silently (no console flash). It relaunches the exe unless
   // the app is already running or a stop-flag marks an intentional quit.
   const lines = [
-    'Dim exePath, stopFlag, fso, wmi, procs, running, p, shell',
+    'Dim exePath, stopFlag, intentMarker, fso, wmi, procs, running, p, shell',
     'exePath = "' + process.execPath + '"',
     'stopFlag = "' + stopFlagPath() + '"',
+    'intentMarker = "' + intentionalShutdownPath() + '"',
     'Set fso = CreateObject("Scripting.FileSystemObject")',
     'If fso.FileExists(stopFlag) Then WScript.Quit',
+    'If fso.FileExists(intentMarker) Then WScript.Quit',
     'Set wmi = GetObject("winmgmts:")',
     'Set procs = wmi.ExecQuery("SELECT ProcessId FROM Win32_Process WHERE Name = ' + "'Virtual Office.exe'" + '")',
     'running = False',
@@ -246,9 +278,13 @@ function writeRelauncherSh() {
     '#!/bin/bash',
     `EXE_PATH="${process.execPath}"`,
     `STOP_FLAG="${stopFlagPath()}"`,
+    `INTENT_MARKER="${intentionalShutdownPath()}"`,
     'while true; do',
     '  sleep 5',
     '  if [ -f "$STOP_FLAG" ]; then',
+    '    exit 0',
+    '  fi',
+    '  if [ -f "$INTENT_MARKER" ]; then',
     '    exit 0',
     '  fi',
     '  if ! ps -x -o command | grep -E -i "virtual-office|virtual office" | grep -v "grep" | grep -v "vo-relauncher.sh" > /dev/null; then',
@@ -293,87 +329,81 @@ function ensureKeepAliveTask() {
   }
 }
 
-// Remove the keep-alive task (used if persistence is ever turned off).
-function removeKeepAliveTask() {
-  if (process.platform !== 'win32') return;
-  try {
-    execFile('schtasks', ['/Delete', '/TN', KEEPALIVE_TASK, '/F'], () => {});
-  } catch (e) { /* ignore */ }
-}
 // ---------------------------------------------------------------------------
-
-function requestQuit() {
-  const conf = configStore.readConfig();
-  const correctPassword = conf.quitPassword || process.env.QUIT_PASSWORD || 'office_admin_exit_pass';
-
-  if (authenticatedToQuit || !correctPassword) {
-    app.isQuitting = true;
-    writeStopFlag(); // legitimate quit — tell the watchdog not to relaunch
-
-    // Clean up database presence before terminating
-    const serverModule = require('./backend/server');
-    const db = require('./backend/database');
-    const serverId = serverModule.getServerId ? serverModule.getServerId() : null;
-
-    if (serverId && db && typeof db.run === 'function') {
-      console.log('[main] Cleaning up database presence before shutdown...');
-      db.run(`
-        UPDATE sessions 
-        SET ended_at = CURRENT_TIMESTAMP, exit_status = 'graceful', exit_reason = 'User closed application normally' 
-        WHERE ended_at IS NULL AND server_id = ?
-      `, [serverId], () => {
-        db.run(`
-          UPDATE users 
-          SET status = 'closed', last_seen = CURRENT_TIMESTAMP 
-          WHERE id NOT IN (
-            SELECT DISTINCT user_id FROM sessions WHERE ended_at IS NULL
-          )
-        `, () => {
-          app.quit();
-        });
-      });
-    } else {
-      app.quit();
-    }
-  } else {
-    showMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('prompt-quit-password');
-    }
-  }
-}
 
 app.on('before-quit', (event) => {
   if (isSecondaryInstance) return;
-  const conf = configStore.readConfig();
-  const correctPassword = conf.quitPassword || process.env.QUIT_PASSWORD || 'office_admin_exit_pass';
-
-  if (!app.isQuitting && !authenticatedToQuit && correctPassword) {
+  if (!app.isQuitting) {
     event.preventDefault();
-    requestQuit();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+    return;
   }
+  writeStopFlag();
 });
 
 app.on('session-end', () => {
   app.isQuitting = true;
-  writeStopFlag(); // OS shutdown/logoff — don't fight it; autostart brings us back at next login
+  configStore.writeConfig({ gracefulExit: true });
+  writeStopFlag(); // OS shutdown/logoff; ordinary autostart clears this flag.
 });
 
-ipcMain.handle('verify-quit-password', (event, password) => {
-  const conf = configStore.readConfig();
-  const correctPassword = conf.quitPassword || process.env.QUIT_PASSWORD || 'office_admin_exit_pass';
-  
-  if (password === correctPassword) {
-    authenticatedToQuit = true;
-    app.isQuitting = true;
-    
-    // Save graceful exit flag as true before quitting!
-    configStore.writeConfig({ gracefulExit: true });
-
-    requestQuit();
-    return { success: true };
+ipcMain.handle('authenticate-headquarters', async (event, payload) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false, error: 'Invalid desktop request' };
+  const username = payload && typeof payload.username === 'string' ? payload.username : '';
+  const password = payload && typeof payload.password === 'string' ? payload.password : '';
+  let origin;
+  try { origin = headquartersOrigin(payload && payload.hq); }
+  catch (e) { return { success: false, error: 'Invalid Headquarters Address' }; }
+  if (!username || !password) return { success: false, error: 'Enter your username and password' };
+  try {
+    const response = await fetch(`${origin}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      signal: AbortSignal.timeout(8000)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || typeof data.token !== 'string' || !Number.isSafeInteger(data.user?.id)) {
+      return { success: false, error: data.error || 'Could not sign in to Headquarters' };
+    }
+    saveDesktopAuth({ token: data.token, hq: origin, userId: data.user.id });
+    return { success: true, token: data.token, user: data.user };
+  } catch (e) {
+    return { success: false, error: 'Could not connect to Headquarters' };
   }
-  return { success: false, error: 'Incorrect password' };
+});
+
+ipcMain.handle('clear-desktop-auth', (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return false;
+  try { fs.unlinkSync(desktopAuthPath()); } catch (e) {}
+  return true;
+});
+
+ipcMain.handle('turn-off-v-office', async (event) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return { success: false, error: 'Invalid desktop request' };
+  const auth = readDesktopAuth();
+  if (!auth || !auth.token || !auth.hq) return { success: false, error: 'Sign in again to authorize desktop shutdown' };
+  try {
+    const response = await fetch(`${auth.hq}/api/desktop/shutdown-authorization`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${auth.token}` },
+      signal: AbortSignal.timeout(8000)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.allowed !== true || result.userId !== auth.userId) {
+      return { success: false, error: result.error || 'Shutdown permission denied' };
+    }
+    fs.writeFileSync(intentionalShutdownPath(), JSON.stringify({ userId: result.userId, hq: auth.hq, at: Date.now() }));
+    writeStopFlag();
+    configStore.writeConfig({ gracefulExit: true });
+    applyAutostartSettings(false);
+    app.isQuitting = true;
+    // Renderer sends client_graceful_exit and disconnects before this fires.
+    setTimeout(() => app.quit(), 1500);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: 'Could not verify shutdown permission with Headquarters' };
+  }
 });
 
 // Enable Linux screen sharing support (PipeWire)
@@ -391,13 +421,12 @@ if (!gotLock) {
   app.quit();
 } else {
   app.on('second-instance', () => showMainWindow());
-  // Start the Express backend server (only in the primary instance).
-  // The callback gives us the real port (it may differ from 3000 if that was
-  // busy), so the windows always point at the right place.
+}
+
+function startBundledServer() {
   startServer((boundPort) => {
     BASE_URL = `http://localhost:${boundPort}`;
     serverReady = true;
-    // If the window was created before the port was known, load it now.
     if (mainWindow) mainWindow.loadURL(BASE_URL);
   });
 }
@@ -903,30 +932,16 @@ function createWindow() {
   });
 
   mainWindow.on('close', (event) => {
-    let minimizeToTray = true;
-    try {
-      const configPath = path.join(app.getPath('userData'), 'vo_config.json');
-      if (fs.existsSync(configPath)) {
-        const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        let configData = {};
-        if (raw && raw.enc && safeStorage && safeStorage.isEncryptionAvailable()) {
-          configData = JSON.parse(safeStorage.decryptString(Buffer.from(raw.enc, 'base64')));
-        } else if (raw && raw.plain) {
-          configData = JSON.parse(raw.plain);
-        } else {
-          configData = raw || {};
-        }
-        if (configData.appTray === false) minimizeToTray = false;
-      }
-    } catch (e) {
-      minimizeToTray = true;
-    }
-
-    if (!app.isQuitting && minimizeToTray) {
+    if (!app.isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     }
     return false;
+  });
+  mainWindow.on('query-session-end', () => {
+    app.isQuitting = true;
+    configStore.writeConfig({ gracefulExit: true });
+    writeStopFlag();
   });
 }
 
@@ -958,9 +973,7 @@ function createTray() {
   }
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: 'Open Virtual Office', click: showMainWindow },
-    { type: 'separator' },
-    { label: 'Quit', click: () => { requestQuit(); } }
+    { label: 'Open Virtual Office', click: showMainWindow }
   ]);
   tray.setToolTip('Virtual Office — running in the background');
   tray.setContextMenu(contextMenu);
@@ -969,6 +982,15 @@ function createTray() {
 }
 
 app.whenReady().then(() => {
+  if (startHidden && hasIntentionalShutdown()) {
+    app.isQuitting = true;
+    app.quit();
+    return;
+  }
+  // A visible launch is a deliberate return to the office.
+  if (!startHidden) clearIntentionalShutdown();
+  configStore.writeConfig({ gracefulExit: false });
+  startBundledServer();
   // Route getDisplayMedia() to the source the user picked in our custom picker.
   // This uses Electron's native capture path, which renders correctly on
   // Wayland/PipeWire (the old chromeMediaSourceId path produced black frames).
@@ -987,8 +1009,8 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
 
-  // Fresh launch: clear any leftover stop intent, then arm the persistence
-  // watchdog so a force-kill (Task Manager / crash) relaunches us after ~1s.
+  // Ordinary startup clears the transient watchdog flag. The persistent
+  // intentional-shutdown marker is only cleared by a visible manual launch.
   clearStopFlag();
   startWatchdog();
   ensureKeepAliveTask();
@@ -1027,6 +1049,8 @@ app.whenReady().then(() => {
 
 // Launch automatically when the user logs into Windows/macOS (if configured).
 function applyAutostartSettings(enabled) {
+  // Full-off is the only application-level way to disable automatic startup.
+  enabled = !hasIntentionalShutdown();
   if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
     try {
       if (app.isPackaged) {

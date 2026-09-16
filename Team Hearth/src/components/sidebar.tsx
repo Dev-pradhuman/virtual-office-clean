@@ -3,7 +3,7 @@ import { Avatar, PresenceDot, PresenceLegend, SectionLabel } from "./ui-bits";
 import { CHANNELS, type TeamUser } from "@/lib/sample-data";
 import { cn } from "@/lib/utils";
 import { useUI } from "@/lib/ui-context";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { CommandPalette } from "./command-palette";
 import { UserProfileModal } from "./user-profile-modal";
 import {
@@ -19,7 +19,6 @@ import {
   Settings2,
   LogOut,
   Search,
-  ChevronUp,
 } from "lucide-react";
 
 const NAV: {
@@ -40,7 +39,7 @@ const NAV: {
 ];
 
 export function Sidebar() {
-  const { users, currentUser, activeView, setActiveView, setActiveChannel, logout, setPresence } = useApp();
+  const { users, currentUser, activeView, setActiveView, setActiveChannel, logout } = useApp();
   const { mobileNavOpen, setMobileNavOpen } = useUI();
   // Navigate, then close the mobile drawer so the chosen view is visible.
   const go = (v: ActiveView) => {
@@ -48,9 +47,7 @@ export function Sidebar() {
     setMobileNavOpen(false);
   };
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
   const [profileUser, setProfileUser] = useState<TeamUser | null>(null);
-  const statusRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,15 +59,6 @@ export function Sidebar() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-
-  useEffect(() => {
-    if (!statusOpen) return;
-    const onClick = (e: MouseEvent) => {
-      if (!statusRef.current?.contains(e.target as Node)) setStatusOpen(false);
-    };
-    window.addEventListener("mousedown", onClick);
-    return () => window.removeEventListener("mousedown", onClick);
-  }, [statusOpen]);
 
   if (!currentUser) return null;
   const isAdmin = currentUser.role === "admin";
@@ -228,34 +216,8 @@ export function Sidebar() {
         </div>
       </nav>
 
-      <div className="relative border-t border-border/50 p-3 flex items-center gap-2 bg-background/30 backdrop-blur-xl" ref={statusRef}>
-        {statusOpen && (
-          <div className="absolute bottom-full left-3 right-3 mb-2 rounded-lg border border-border bg-card shadow-lg overflow-hidden animate-scale-in origin-bottom">
-            <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-muted-foreground/80 border-b border-border">
-              Set status
-            </div>
-            {(["online", "away", "busy", "offline"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setPresence(s);
-                  setStatusOpen(false);
-                }}
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-muted transition",
-                  currentUser.status === s && "bg-brand/5 text-brand font-medium",
-                )}
-              >
-                <PresenceDot status={s} ring={false} className="size-2" showTooltip={false} />
-                <span className="capitalize">{s}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          onClick={() => setStatusOpen((v) => !v)}
-          className="flex flex-1 items-center gap-2 rounded-md p-1.5 hover:bg-muted transition min-w-0"
-        >
+      <div className="relative border-t border-border/50 p-3 flex items-center gap-2 bg-background/30 backdrop-blur-xl">
+        <div className="flex flex-1 items-center gap-2 rounded-md p-1.5 min-w-0">
           <Avatar user={currentUser} size={28} showStatus />
           <div className="min-w-0 text-left">
             <div className="text-xs font-semibold truncate">
@@ -265,11 +227,10 @@ export function Sidebar() {
               )}
             </div>
             <div className="text-[10px] text-muted-foreground truncate">
-              <span className="capitalize">{currentUser.status}</span> · click to change
+              <span className="capitalize">{currentUser.status}</span>
             </div>
           </div>
-          <ChevronUp className={cn("size-3 text-muted-foreground transition-transform", statusOpen && "rotate-180")} />
-        </button>
+        </div>
         <button
           onClick={() => go("settings")}
           title="Settings"

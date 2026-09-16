@@ -19,7 +19,6 @@ const VIEW_LABELS: Record<string, string> = {
   integrations: "Integrations",
   edith: "Edith AI",
   settings: "Settings",
-  idle: "Idle",
 };
 
 export function UserProfileModal({

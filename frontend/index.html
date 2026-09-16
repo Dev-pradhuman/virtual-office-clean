@@ -320,12 +320,10 @@
             <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
 
             <h3>💻 Application Settings</h3>
-            <p class="settings-hint">Configure app startup behavior, tray integration, and language preferences.</p>
-            <div style="display:flex; flex-direction:column; gap:12px; margin-top:10px;">
-              <div style="display:flex; align-items:center; gap:10px;">
-                <input type="checkbox" id="settings-app-tray" checked style="width:auto;">
-                <label for="settings-app-tray" style="font-size:14px; user-select:none;">Minimize to Tray on Close (X button / Alt+F4)</label>
-              </div>
+            <p class="settings-hint">Closing the window keeps V-Office running in the system tray.</p>
+            <div id="turn-off-section" class="hidden" style="margin-top:14px;">
+              <button type="button" id="turn-off-v-office" class="btn danger" style="width:auto;">Turn Off Virtual Office</button>
+              <div id="turn-off-status" class="settings-status"></div>
             </div>
             <div class="input-group" style="margin-top: 15px;">
               <label for="settings-app-language">Language (Future Ready)</label>
@@ -360,9 +358,9 @@
             <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 12px; border-radius: 8px; margin-top: 10px;">
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span>Native Input Injection:</span>
-                <span id="settings-control-status" style="font-weight:bold; color:var(--busy-color);">Checking...</span>
+                <span id="settings-control-status" style="font-weight:bold; color:var(--danger-color);">Checking...</span>
               </div>
-              <p id="settings-control-desc" class="settings-hint" style="margin-top:6px; font-size:12px; display:none; color:var(--away-color);">
+              <p id="settings-control-desc" class="settings-hint" style="margin-top:6px; font-size:12px; display:none; color:var(--warning-color);">
                 Warning: <code>@nut-tree-fork/nut-js</code> is not installed or failed to compile on this machine. Teammates will not be able to control your screen. Run <code>npm install @nut-tree-fork/nut-js</code>.
               </p>
             </div>
@@ -425,14 +423,12 @@
             </div>
             
             <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
-            
-            <h3>🚪 Exit Security</h3>
-            <p class="settings-hint">Configure the security password required to quit the desktop application on workstations. Users cannot close the app without this password.</p>
-            <div class="input-group">
-              <label for="settings-quit-pass">New Exit Password <span id="settings-quit-pass-set" class="settings-badge hidden">configured</span></label>
-              <input type="password" id="settings-quit-pass" placeholder="Enter new exit password (leave blank to keep current)" autocomplete="off">
-            </div>
-            
+
+            <h3>User permissions</h3>
+            <p class="settings-hint">Choose who may turn V-Office off completely. Closing the window always keeps it in the tray.</p>
+            <div id="shutdown-permissions-list"></div>
+            <div id="shutdown-permissions-status" class="settings-status"></div>
+
             <hr style="margin: 24px 0; border: none; border-top: 1px solid rgba(255, 255, 255, 0.08);">
             
             <h3>✨ Software Updates (Global)</h3>
@@ -533,7 +529,7 @@
                   <tr style="border-bottom:1px solid rgba(255,255,255,0.1); opacity:0.8;">
                     <th style="padding:10px 5px;">User</th>
                     <th style="padding:10px 5px;">Location</th>
-                    <th style="padding:10px 5px;">Status/Idle</th>
+                    <th style="padding:10px 5px;">Presence</th>
                     <th style="padding:10px 5px;">OS / App</th>
                     <th style="padding:10px 5px;">CPU / RAM</th>
                     <th style="padding:10px 5px;">Ping</th>
@@ -789,17 +785,11 @@
       <p id="profile-username" class="settings-hint"></p>
 
       <div class="status-box">
-        <label class="status-box-label">Your status</label>
-        <div class="status-options">
-          <button type="button" class="status-opt" data-status="online">🟢 Online</button>
-          <button type="button" class="status-opt" data-status="away">🌙 Away</button>
-          <button type="button" class="status-opt" data-status="busy">⛔ Busy</button>
-        </div>
+        <label class="status-box-label">Presence: Online while connected</label>
         <div class="status-msg-row">
-          <input type="text" id="status-message" maxlength="60" placeholder="What's on your mind? (optional)" autocomplete="off">
-          <button type="button" id="status-save" class="btn primary">Set</button>
+          <input type="text" id="status-message" maxlength="60" placeholder="Status message (optional)" autocomplete="off">
+          <button type="button" id="status-save" class="btn primary">Save message</button>
         </div>
-        <div class="settings-hint" style="margin:6px 0 0">Auto-set to Away after a few minutes idle.</div>
       </div>
 
       <form id="change-password-form">
@@ -978,25 +968,6 @@
       </div>
     </div>
     <input type="file" id="autobg-input" accept="image/*" class="hidden">
-  </div>
-
-  <!-- Exit Application Password Modal -->
-  <div id="quit-modal" class="hidden modal-overlay">
-    <div class="modal glass-panel">
-      <h3>🚪 Exit Application</h3>
-      <p class="settings-hint">A security password is required to exit and shut down the Virtual Office.</p>
-      <form id="quit-form">
-        <div class="input-group">
-          <label for="quit-pass">Security Password</label>
-          <input type="password" id="quit-pass" required placeholder="Enter security password">
-        </div>
-        <div id="quit-status" class="settings-status"></div>
-        <div class="modal-actions">
-          <button type="submit" class="btn primary">Exit App</button>
-          <button type="button" id="quit-close" class="btn outline">Cancel</button>
-        </div>
-      </form>
-    </div>
   </div>
 
   <!-- Automatic Updater Modal -->

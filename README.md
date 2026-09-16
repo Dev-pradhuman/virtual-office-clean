@@ -20,7 +20,7 @@ Express, Socket.IO, WebRTC, and SQLite.
 - **Team tools** — shared **Tasks** board, **Projects** list, **Calendar** events, and a collaborative **Whiteboard**, all persisted in SQLite and synced live over Socket.IO.
 - **File sharing** — optional uploads to Google Drive.
 - **Desktop notifications** + system tray + run-on-startup.
-- **Secure auto-login** — sign in once per machine; the token is stored encrypted (OS keychain) and you stay signed in until you sign out.
+- **Persistent login** — sign in once per machine; Electron keeps the authenticated Headquarters session in encrypted local storage when the OS supports it.
 
 ## Tech stack
 
@@ -31,7 +31,7 @@ Express, Socket.IO, WebRTC, and SQLite.
 | Real-time / signaling | Socket.IO |
 | Peer-to-peer media | WebRTC |
 | Database | SQLite |
-| Frontend | Vanilla HTML / CSS / JS |
+| Frontend | React/Vite (`Team Hearth`), with a vanilla fallback (`frontend`) |
 | 3D scene | Three.js (vendored under `frontend/vendor/`) |
 
 ---
@@ -125,8 +125,8 @@ Each team runs **their own** backend. On Render:
 1. Run `npm start`.
 2. In the login screen, set **Headquarters Address** to your backend URL
    (e.g. `https://<your-app>.onrender.com`, or leave `http://localhost:3000` for local).
-3. Log in. The address + an encrypted token are saved, so future launches
-   auto-login — until you sign out.
+3. Log in. Electron pins the authenticated Headquarters session for permission
+   checks, and the renderer keeps its login until you sign out.
 
 ---
 
@@ -223,8 +223,9 @@ npm run build:linux   # Linux AppImage
 ## Security notes
 
 - Secrets live only in `.env` (gitignored) and your Render env vars — never in the repo.
-- Login tokens are JWT-signed with your `JWT_SECRET`; the desktop app stores them
-  encrypted via the OS keychain (`safeStorage`).
+- Login tokens are JWT-signed with your `JWT_SECRET`. Electron stores its
+  verified Headquarters token encrypted with `safeStorage` when available;
+  the renderer currently also keeps its session token in local storage.
 - REST endpoints (`/api/users`, `/api/messages`, `/api/upload`) require a valid token.
 - CORS is restricted to `ALLOWED_ORIGINS`.
 - Chat content is rendered as text (no HTML/script injection).

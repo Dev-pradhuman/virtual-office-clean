@@ -1217,13 +1217,11 @@
           const locCell = document.createElement('td');
           locCell.style.padding = '10px 5px';
           locCell.textContent = s.current_label || 'Offline';
-          locCell.style.color = s.current_view === 'idle' ? 'var(--text-muted)' : 'var(--primary-color)';
+          locCell.style.color = 'var(--primary-color)';
           
           const presenceCell = document.createElement('td');
           presenceCell.style.padding = '10px 5px';
-          const pStatus = s.user_presence_status || 'online';
-          const isIdle = pStatus === 'away';
-          presenceCell.innerHTML = `<span class="dot ${isIdle ? 'away' : 'online'}" style="display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; background:${isIdle ? '#f59e0b' : '#10b981'};"></span>${isIdle ? 'Away (Idle)' : 'Active'}`;
+          presenceCell.innerHTML = `<span class="dot online" style="display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; background:#10b981;"></span>Online`;
           
           const osCell = document.createElement('td');
           osCell.style.padding = '10px 5px';

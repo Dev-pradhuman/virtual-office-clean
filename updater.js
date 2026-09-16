@@ -1,5 +1,5 @@
 const { autoUpdater } = require('electron-updater');
-const { ipcMain } = require('electron');
+const { ipcMain, app } = require('electron');
 const configStore = require('./backend/config-store');
 
 // Configure autoUpdater options
@@ -57,6 +57,7 @@ function initializeUpdater(mainWindow) {
 
   ipcMain.handle('install-update', () => {
     logUpdateEvent('install_started', 'User requested update restart/installation');
+    app.isQuitting = true; // update restart is maintenance, not a manual shutdown
     autoUpdater.quitAndInstall();
     return true;
   });
