@@ -29,14 +29,6 @@ export interface ChatMessage {
   attachmentPreview?: { kind: "image" | "file"; label: string };
 }
 
-export interface DMThread {
-  id: string;
-  withUserId: string;
-  lastMessage: string;
-  unread: number;
-  timestamp: string;
-}
-
 export interface Task {
   id: string;
   title: string;
@@ -45,6 +37,7 @@ export interface Task {
   assigneeId: string;
   dueDate: string;
   priority: "low" | "medium" | "high";
+  projectId?: string;
   comments: { authorId: string; body: string; timestamp: string }[];
 }
 
@@ -57,178 +50,13 @@ export interface CalendarEvent {
   color: string;
 }
 
-export const SAMPLE_USERS: TeamUser[] = [
-  {
-    id: "u1",
-    name: "Arjun Sharma",
-    designation: "Founder & Admin",
-    initials: "AS",
-    color: "#6366f1",
-    status: "online",
-    statusMessage: "Writing docs",
-    inCall: true,
-    role: "admin",
-    currentApp: "Writing docs · Notion",
-    timeOnlineToday: "4h 12m today",
-    cameraOn: true,
-    micOn: true,
-  },
-  {
-    id: "u2",
-    name: "Aviral Verma",
-    designation: "Product Engineer",
-    initials: "AV",
-    color: "#10b981",
-    status: "online",
-    statusMessage: "In a meeting",
-    inCall: true,
-    role: "member",
-    currentApp: "In Figma · Presence v3",
-    timeOnlineToday: "3h 48m today",
-    cameraOn: false,
-    micOn: true,
-  },
-  {
-    id: "u3",
-    name: "Pradhuman Singh",
-    designation: "Design Lead",
-    initials: "PS",
-    color: "#f59e0b",
-    status: "online",
-    statusMessage: "Focus mode — back at 3pm",
-    inCall: false,
-    role: "member",
-    currentApp: "Focus mode · VS Code",
-    timeOnlineToday: "2h 05m today",
-    cameraOn: false,
-    micOn: false,
-  },
-];
-
-export const SAMPLE_MESSAGES: ChatMessage[] = [
-  {
-    id: "m1",
-    channelId: "general",
-    authorId: "u3",
-    timestamp: "10:12 AM",
-    content:
-      "Morning team ☕ — pushed the new sidebar spec. Would love a quick review before standup.",
-  },
-  {
-    id: "m2",
-    channelId: "general",
-    authorId: "u2",
-    timestamp: "10:15 AM",
-    content:
-      "Just looked. The presence dots feel calm — exactly what we want. The online signal reads clearly across the office.",
-    attachment: { name: "presence-dots-v3.fig", size: "2.4 MB" },
-    reactions: [{ emoji: "👍", count: 2 }, { emoji: "🎯", count: 1 }],
-    attachmentPreview: { kind: "image", label: "presence-dots-v3.fig" },
-  },
-  {
-    id: "m3",
-    channelId: "general",
-    authorId: "u1",
-    timestamp: "10:18 AM",
-    content:
-      "Agreed. I'll ship the token change this afternoon. Anyone free to pair on the Electron build scripts?",
-    reactions: [{ emoji: "🙌", count: 1 }],
-  },
-  {
-    id: "m4",
-    channelId: "general",
-    authorId: "u3",
-    timestamp: "10:22 AM",
-    content: "I can jump in after lunch. Ping me in DMs when you're ready.",
-  },
-];
-
-export const SAMPLE_DMS: DMThread[] = [
-  { id: "d1", withUserId: "u2", lastMessage: "Sounds good, let's sync at 2pm", unread: 2, timestamp: "9:41" },
-  { id: "d2", withUserId: "u3", lastMessage: "Attached the mocks", unread: 0, timestamp: "Yesterday" },
-];
-
-export const SAMPLE_TASKS: Task[] = [
-  {
-    id: "t1",
-    title: "Define API contract for presence engine",
-    description:
-      "Draft the websocket message shape, heartbeat cadence, and reconnection policy. Sync with backend before implementation.",
-    status: "todo",
-    assigneeId: "u2",
-    dueDate: "Oct 14",
-    priority: "high",
-    comments: [
-      { authorId: "u1", body: "Let's target < 200ms round-trip.", timestamp: "2d ago" },
-    ],
-  },
-  {
-    id: "t2",
-    title: "Update documentation for Electron bridge",
-    description: "Cover IPC channels, permission prompts, and update-channel flow.",
-    status: "todo",
-    assigneeId: "u3",
-    dueDate: "Oct 18",
-    priority: "medium",
-    comments: [],
-  },
-  {
-    id: "t3",
-    title: "Design per-user customization panel",
-    description:
-      "Personal preferences scoped per user: theme, accent, density, sidebar position, backdrop, font size.",
-    status: "in_progress",
-    assigneeId: "u3",
-    dueDate: "Oct 12",
-    priority: "high",
-    comments: [
-      { authorId: "u2", body: "Loving the floating popover pattern.", timestamp: "1h ago" },
-    ],
-  },
-  {
-    id: "t4",
-    title: "Finalize Electron build scripts",
-    description: "Cross-compile Windows + macOS packages, sign binaries.",
-    status: "in_progress",
-    assigneeId: "u1",
-    dueDate: "Oct 15",
-    priority: "medium",
-    comments: [],
-  },
-  {
-    id: "t5",
-    title: "OAuth login flow refactor",
-    description: "Migrate to httpOnly refresh tokens.",
-    status: "completed",
-    assigneeId: "u2",
-    dueDate: "Oct 5",
-    priority: "medium",
-    comments: [],
-  },
-  {
-    id: "t6",
-    title: "Set up server address routing",
-    description: "Multi-HQ address support in login.",
-    status: "completed",
-    assigneeId: "u1",
-    dueDate: "Sep 30",
-    priority: "low",
-    comments: [],
-  },
-];
-
-export const SAMPLE_EVENTS: CalendarEvent[] = [
-  { id: "e1", title: "Design critique", date: "2026-07-13", time: "10:00", attendees: ["u1", "u3"], color: "#6366f1" },
-  { id: "e2", title: "Sprint planning", date: "2026-07-14", time: "14:00", attendees: ["u1", "u2", "u3"], color: "#10b981" },
-  { id: "e3", title: "1:1 with Sam", date: "2026-07-16", time: "11:30", attendees: ["u1", "u2"], color: "#f59e0b" },
-  { id: "e4", title: "All-hands", date: "2026-07-20", time: "16:00", attendees: ["u1", "u2", "u3"], color: "#ef4444" },
-];
-
+// Supported shared rooms. Message contents and unread state always come from
+// the backend; this list only defines the stable channel identifiers.
 export const CHANNELS = [
-  { id: "general", name: "general", unread: 0 },
-  { id: "engineering", name: "engineering", unread: 3 },
-  { id: "design-ops", name: "design-ops", unread: 0 },
-];
+  { id: "general", name: "general" },
+  { id: "engineering", name: "engineering" },
+  { id: "design-ops", name: "design-ops" },
+] as const;
 
 export const ACCENT_OPTIONS = [
   { id: "indigo", label: "Indigo", value: "0.585 0.187 277", hex: "#6366f1" },
@@ -334,54 +162,6 @@ export interface Project {
   dueDate: string;
 }
 
-export const SAMPLE_PROJECTS: Project[] = [
-  {
-    id: "p1",
-    name: "Presence Engine v2",
-    description: "Websocket-based presence with sub-200ms round-trip.",
-    status: "active",
-    members: ["u1", "u2"],
-    progress: 62,
-    dueDate: "Oct 28",
-  },
-  {
-    id: "p2",
-    name: "Design System Refresh",
-    description: "Consolidate tokens, ship dark theme, drop legacy primitives.",
-    status: "active",
-    members: ["u3", "u1"],
-    progress: 34,
-    dueDate: "Nov 10",
-  },
-  {
-    id: "p3",
-    name: "Desktop Update Channel",
-    description: "Signed installers + auto-update rollout by cohort.",
-    status: "planning",
-    members: ["u1"],
-    progress: 12,
-    dueDate: "Nov 22",
-  },
-  {
-    id: "p4",
-    name: "Onboarding Flow",
-    description: "Fresh setup wizard, HQ connection, invite links.",
-    status: "on_hold",
-    members: ["u2", "u3"],
-    progress: 45,
-    dueDate: "Dec 05",
-  },
-  {
-    id: "p5",
-    name: "Q3 Retro",
-    description: "Post-mortem docs and action items.",
-    status: "completed",
-    members: ["u1", "u2", "u3"],
-    progress: 100,
-    dueDate: "Sep 30",
-  },
-];
-
 export interface TeamFile {
   id: string;
   name: string;
@@ -392,32 +172,6 @@ export interface TeamFile {
   kind: "doc" | "image" | "sheet" | "slide" | "pdf" | "other";
   url?: string;
 }
-
-export const SAMPLE_FILES: TeamFile[] = [
-  { id: "f1", name: "Presence spec.md", size: "24 KB", ownerId: "u1", source: "drive", modified: "2h ago", kind: "doc" },
-  { id: "f2", name: "presence-dots-v3.fig", size: "2.4 MB", ownerId: "u3", source: "drive", modified: "Yesterday", kind: "image" },
-  { id: "f3", name: "Q4 roadmap.sheet", size: "88 KB", ownerId: "u1", source: "drive", modified: "3d ago", kind: "sheet" },
-  { id: "f4", name: "All-hands deck.slide", size: "5.1 MB", ownerId: "u2", source: "drive", modified: "Oct 04", kind: "slide" },
-  { id: "f5", name: "Contract-signed.pdf", size: "312 KB", ownerId: "u1", source: "local", modified: "Sep 28", kind: "pdf" },
-  { id: "f6", name: "brand-mark.png", size: "180 KB", ownerId: "u3", source: "local", modified: "Sep 22", kind: "image" },
-];
-
-export interface AuditEntry {
-  id: string;
-  actorId: string;
-  action: string;
-  target: string;
-  timestamp: string;
-}
-
-export const SAMPLE_AUDIT: AuditEntry[] = [
-  { id: "a1", actorId: "u1", action: "Updated integration keys", target: "Google Drive", timestamp: "Today · 10:41 AM" },
-  { id: "a2", actorId: "u2", action: "Assigned task", target: "Define API contract", timestamp: "Today · 09:15 AM" },
-  { id: "a3", actorId: "u1", action: "Changed shared backdrop", target: "Aurora mesh", timestamp: "Yesterday · 6:22 PM" },
-  { id: "a4", actorId: "u3", action: "Uploaded file", target: "presence-dots-v3.fig", timestamp: "Yesterday · 2:04 PM" },
-  { id: "a5", actorId: "u1", action: "Updated user permissions", target: "Team access", timestamp: "Oct 06 · 5:12 PM" },
-  { id: "a6", actorId: "u2", action: "Joined call", target: "Sprint planning", timestamp: "Oct 05 · 2:00 PM" },
-];
 
 export const OFFICE_QUOTES = [
   "The best way to predict the future is to build it. — Alan Kay",

@@ -123,9 +123,11 @@ export type ActiveView =
   | "calendar"
   | "whiteboard"
   | "files"
+  | "team"
   | "integrations"
   | "edith"
-  | "settings";
+  | "settings"
+  | "admin";
 
 interface AppContextValue {
   session: Session | null;
@@ -178,20 +180,6 @@ interface AppContextValue {
   updateStatus: (message: string) => void;
 }
 
-// Built-in "who's online" backdrops (committed under public/backdrops), keyed by
-// the sorted online usernames. Admin-uploaded images (auto_backdrop) override
-// these; a manual shared office image is the next fallback.
-const STATIC_AUTO_BACKDROPS: Record<string, string> = {
-  "": "/backdrops/none.jpg",
-  Arjun: "/backdrops/arjun.jpg",
-  Aviral: "/backdrops/aviral.jpg",
-  Pradhuman: "/backdrops/pradhuman.jpg",
-  "Arjun|Aviral": "/backdrops/arjun-aviral.jpg",
-  "Arjun|Pradhuman": "/backdrops/arjun-pradhuman.jpg",
-  "Aviral|Pradhuman": "/backdrops/aviral-pradhuman.jpg",
-  "Arjun|Aviral|Pradhuman": "/backdrops/all.jpg",
-};
-
 // Human labels for the view we broadcast to teammates via activity_update.
 const VIEW_LABELS: Record<ActiveView, string> = {
   office: "In the office",
@@ -202,9 +190,11 @@ const VIEW_LABELS: Record<ActiveView, string> = {
   calendar: "Calendar",
   whiteboard: "Whiteboard",
   files: "Files",
+  team: "Team",
   integrations: "Integrations",
   edith: "Edith AI",
   settings: "Settings",
+  admin: "Admin",
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -679,7 +669,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .map((u) => u.name)
       .sort()
       .join("|");
-    let next = autoBackdropMap[key] || STATIC_AUTO_BACKDROPS[key] || manualBackdrop || "/office.png";
+    let next = autoBackdropMap[key] || manualBackdrop || "/office.png";
     if (next.startsWith("/uploads/")) next = `${getApiBase()}${next}`;
     return next;
   }, [users, autoBackdropMap, manualBackdrop]);

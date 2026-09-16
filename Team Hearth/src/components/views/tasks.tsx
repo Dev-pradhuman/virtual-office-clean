@@ -121,8 +121,9 @@ export function TasksView() {
   return (
     <div className="h-full flex flex-col">
       <ViewHeader
-        title="Tasks & projects"
-        subtitle={`${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
+        eyebrow="TASKS"
+        title="Turn plans into progress."
+        subtitle={`${tasks.length} real task${tasks.length === 1 ? "" : "s"} · Organize, collaborate, and get things done`}
         actions={
           <button
             onClick={() => setNewOpen(true)}

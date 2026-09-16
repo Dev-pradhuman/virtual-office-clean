@@ -11,6 +11,8 @@ import { ProjectsView } from "./views/projects";
 import { FilesView } from "./views/files";
 import { IntegrationsView } from "./views/integrations";
 import { EdithView } from "./views/edith";
+import { TeamView } from "./views/team";
+import { Topbar } from "./topbar";
 import { cn } from "@/lib/utils";
 import { UIProvider, useUI } from "@/lib/ui-context";
 
@@ -61,11 +63,12 @@ function ShellBody() {
         />
       )}
       <Sidebar />
-      <main className="flex-1 min-w-0 relative top-light-bleed" style={backdropStyle}>
-        <div key={activeView} className="h-full animate-view-in">
-          {renderView(activeView)}
-        </div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col bg-background">
+        <Topbar />
+        <main className="flex-1 min-h-0 min-w-0 relative" style={backdropStyle}>
+          <div key={activeView} className="h-full animate-view-in">{renderView(activeView)}</div>
+        </main>
+      </div>
     </div>
   );
 }
@@ -88,12 +91,16 @@ function renderView(view: string) {
       return <WhiteboardView />;
     case "files":
       return <FilesView />;
+    case "team":
+      return <TeamView />;
     case "integrations":
       return <IntegrationsView />;
     case "edith":
       return <EdithView />;
     case "settings":
       return <SettingsView />;
+    case "admin":
+      return <SettingsView initialTab="admin" />;
     default:
       return <DashboardView />;
   }

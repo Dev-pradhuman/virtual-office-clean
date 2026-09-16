@@ -298,6 +298,7 @@ export function toTask(t: BackendTask): Task {
     assigneeId: t.assignee_id != null ? String(t.assignee_id) : "",
     dueDate: t.due_date ? fmtDate(t.due_date) : "",
     priority,
+    projectId: t.project_id != null ? String(t.project_id) : undefined,
     comments: [],
   };
 }

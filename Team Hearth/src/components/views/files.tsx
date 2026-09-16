@@ -21,6 +21,9 @@ export function FilesView() {
   const drive = adminConfig.googleDriveConnected;
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = files.find((file) => file.id === selectedId) || files[0] || null;
+  const selectedOwner = selected ? users.find((user) => user.id === selected.ownerId) : null;
 
   const onPick = () => inputRef.current?.click();
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,8 +45,9 @@ export function FilesView() {
     <div className="h-full flex flex-col">
       <input ref={inputRef} type="file" className="hidden" onChange={onFile} />
       <ViewHeader
-        title="Files"
-        subtitle={drive ? "Google Drive connected · Local fallback active" : "Local storage · Drive not connected"}
+        eyebrow="FILES"
+        title="All your work, in one place."
+        subtitle={drive ? "Google Drive connected · Local fallback active" : "Local storage · Drive not configured"}
         actions={
           <button
             onClick={onPick}
@@ -55,7 +59,8 @@ export function FilesView() {
         }
       />
       <div className="flex-1 overflow-y-auto p-6">
-        <Card className="overflow-hidden">
+        <div className="vo-page-grid">
+        <Card className="overflow-hidden min-w-0">
           <div className="grid grid-cols-[minmax(0,1fr)_120px_140px_120px_60px] gap-3 px-4 py-2.5 border-b border-border bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
             <div>Name</div>
             <div>Source</div>
@@ -69,7 +74,8 @@ export function FilesView() {
             return (
               <div
                 key={f.id}
-                className="group grid grid-cols-[minmax(0,1fr)_120px_140px_120px_60px] gap-3 px-4 py-2.5 border-b border-border/60 last:border-0 items-center hover:bg-muted/30 transition text-sm"
+                onClick={() => setSelectedId(f.id)}
+                className={`group grid cursor-pointer grid-cols-[minmax(0,1fr)_120px_140px_120px_60px] gap-3 px-4 py-2.5 border-b border-border/60 last:border-0 items-center hover:bg-muted/30 transition text-sm ${selected?.id === f.id ? "bg-cyan-500/5" : ""}`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="size-8 rounded-md bg-muted grid place-items-center text-muted-foreground">
@@ -97,7 +103,7 @@ export function FilesView() {
                 <div className="flex items-center justify-end gap-2">
                   <span className="text-[10px] text-muted-foreground font-mono">{f.size}</span>
                   <button
-                    onClick={() => deleteFile(f.id)}
+                    onClick={(event) => { event.stopPropagation(); deleteFile(f.id); }}
                     className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
                     title="Delete"
                   >
@@ -107,7 +113,25 @@ export function FilesView() {
               </div>
             );
           })}
+          {!files.length && <div className="px-6 py-16 text-center text-sm text-muted-foreground">No files yet. Upload the first file for your office.</div>}
         </Card>
+        <aside className="vo-right-rail">
+          <Card className="p-5">
+            <h3 className="vo-section-title">File details</h3>
+            {selected ? <div className="mt-5">
+              <div className="grid aspect-[4/3] place-items-center rounded-lg border border-border bg-muted/20"><FileText className="size-12 text-cyan-400/70" /></div>
+              <h4 className="mt-4 truncate text-sm font-semibold">{selected.name}</h4>
+              <dl className="mt-4 space-y-3 text-xs">
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Owner</dt><dd>{selectedOwner?.name || "Unknown"}</dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Modified</dt><dd>{selected.modified}</dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Size</dt><dd>{selected.size}</dd></div>
+                <div className="flex justify-between gap-4"><dt className="text-muted-foreground">Storage</dt><dd>{selected.source === "drive" ? "Google Drive" : "V-Office"}</dd></div>
+              </dl>
+              {selected.url && <a className="vo-primary-button mt-5 w-full justify-center" href={fileUrl(selected.url)} target="_blank" rel="noreferrer">Open file</a>}
+            </div> : <p className="mt-4 text-xs text-muted-foreground">Select a file to inspect its details.</p>}
+          </Card>
+        </aside>
+        </div>
       </div>
     </div>
   );

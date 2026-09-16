@@ -118,7 +118,7 @@ export function WhiteboardView() {
 
   return (
     <div className="h-full flex flex-col">
-      <ViewHeader title="Whiteboard" subtitle="Shared canvas · Everyone can edit" />
+      <ViewHeader title="Whiteboard" subtitle="Shared canvas · Everyone can edit" compact />
       <div className="flex-1 relative bg-card">
         <canvas
           ref={canvasRef}

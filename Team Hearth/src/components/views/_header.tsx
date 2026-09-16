@@ -1,36 +1,23 @@
 import type { ReactNode } from "react";
-import { Menu } from "lucide-react";
-import { useUI } from "@/lib/ui-context";
 
-export function ViewHeader({
-  title,
-  subtitle,
-  actions,
-}: {
+export function ViewHeader({ title, subtitle, eyebrow, actions, compact = false }: {
   title: string;
   subtitle?: string;
+  eyebrow?: string;
   actions?: ReactNode;
+  compact?: boolean;
 }) {
-  const { toggleMobileNav } = useUI();
+  if (compact) {
+    return <header className="vo-compact-header"><div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div><div className="flex items-center gap-2">{actions}</div></header>;
+  }
   return (
-    <header className="relative z-10 h-14 shrink-0 border-b border-border/60 bg-background/40 backdrop-blur-xl px-4 md:px-6 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2 min-w-0">
-        {/* Mobile-only menu button — opens the sidebar drawer. */}
-        <button
-          onClick={toggleMobileNav}
-          aria-label="Open navigation menu"
-          className="md:hidden -ml-1 shrink-0 grid size-9 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition"
-        >
-          <Menu className="size-5" />
-        </button>
-        <div className="min-w-0">
-          <h1 className="text-sm font-semibold truncate font-display tracking-tight">{title}</h1>
-          {subtitle && (
-            <p className="text-[11px] text-muted-foreground truncate">{subtitle}</p>
-          )}
-        </div>
+    <header className="vo-page-header">
+      <div className="relative z-10 min-w-0">
+        <div className="vo-eyebrow">{eyebrow || title.toUpperCase()}</div>
+        <h1>{title}</h1>
+        {subtitle && <p>{subtitle}</p>}
       </div>
-      <div className="flex items-center gap-2 shrink-0">{actions}</div>
+      {actions && <div className="relative z-10 flex shrink-0 items-center gap-2 self-end pb-1">{actions}</div>}
     </header>
   );
 }

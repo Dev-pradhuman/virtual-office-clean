@@ -1,7 +1,7 @@
 import { useApp } from "@/lib/app-context";
 import { Card } from "../ui-bits";
 import { ViewHeader } from "./_header";
-import { Cloud, Slack, Github, Calendar as CalIcon } from "lucide-react";
+import { Cloud } from "lucide-react";
 
 export function IntegrationsView() {
   const { adminConfig, setAdminConfig, currentUser } = useApp();
@@ -11,8 +11,9 @@ export function IntegrationsView() {
   return (
     <div className="h-full flex flex-col">
       <ViewHeader
-        title="Integrations"
-        subtitle="Services connected to your headquarters"
+        eyebrow="INTEGRATIONS"
+        title="Connect the tools you actually use."
+        subtitle="Only services supported by this headquarters appear here."
       />
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-3xl mx-auto space-y-4">
@@ -76,29 +77,7 @@ export function IntegrationsView() {
             </div>
           </Card>
 
-          {[
-            { icon: Slack, label: "Slack", desc: "Cross-post channel messages.", color: "text-fuchsia-500 bg-fuchsia-500/15" },
-            { icon: Github, label: "GitHub", desc: "Show PR & commit activity on projects.", color: "text-foreground bg-muted" },
-            { icon: CalIcon, label: "Google Calendar", desc: "Sync events into the Calendar view.", color: "text-red-500 bg-red-500/15" },
-          ].map(({ icon: Icon, label, desc, color }) => (
-            <Card key={label} className="p-5 flex items-center gap-4">
-              <div className={`size-11 rounded-xl grid place-items-center ${color}`}>
-                <Icon className="size-5" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-semibold">{label}</h3>
-                  <span className="text-[9px] uppercase tracking-wider bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full font-semibold">
-                    Not connected
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">{desc}</p>
-              </div>
-              <button className="rounded-md border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted">
-                Connect
-              </button>
-            </Card>
-          ))}
+          <p className="px-1 text-xs text-muted-foreground">Additional integrations will appear only when their backend support is available.</p>
         </div>
       </div>
     </div>

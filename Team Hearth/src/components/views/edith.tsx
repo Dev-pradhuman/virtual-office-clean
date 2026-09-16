@@ -4,6 +4,7 @@ import { ViewHeader } from "./_header";
 import { Bot, Mic, MicOff, Send, Volume2, VolumeX, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useApp } from "@/lib/app-context";
 
 interface Msg { id: string; role: "user" | "edith"; text: string }
 
@@ -14,16 +15,17 @@ const RULES: { match: RegExp; reply: string }[] = [
   { match: /\bfile|drive/i, reply: "Go to Files. If Drive is connected (Integrations), files sync from your team drive." },
   { match: /\b(shortcut|keyboard)/i, reply: "Cmd/Ctrl+K opens search, N creates a task, / focuses this input." },
   { match: /\btheme|dark|light/i, reply: "Head to Settings → My Preferences to change theme, accent, and density. Changes are personal to your account." },
-  { match: /\b(who|team|online)/i, reply: "Currently on the roster: Arjun, Aviral, Pradhuman. Presence dots show live status." },
   { match: /\b(thanks|thank)/i, reply: "Anytime. I'm always here — no LLM required." },
 ];
 
-function edithReply(input: string): string {
+function edithReply(input: string, roster: string): string {
+  if (/\b(who|team|online)\b/i.test(input)) return roster;
   for (const r of RULES) if (r.match.test(input)) return r.reply;
   return "I only match a small set of rules — I'm not a general chatbot. Try asking about tasks, calls, files, theme, or team.";
 }
 
 export function EdithView() {
+  const { users } = useApp();
   const [messages, setMessages] = useState<Msg[]>([
     { id: "e0", role: "edith", text: "Hi! I'm Edith. I answer via a small set of rules — not a general LLM. Ask me about tasks, calls, or files." },
   ]);
@@ -80,7 +82,8 @@ export function EdithView() {
     setInput("");
     setInterim("");
     setTimeout(() => {
-      const reply = edithReply(t);
+      const online = users.filter((user) => user.status === "online");
+      const reply = edithReply(t, online.length ? `Online now: ${online.map((user) => user.name).join(", ")}.` : "Nobody else is online right now.");
       setMessages((m) => [...m, { id: `e${Date.now()}`, role: "edith", text: reply }]);
       if (spoken || speakRef.current) speakText(reply);
     }, 250);

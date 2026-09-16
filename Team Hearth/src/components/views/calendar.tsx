@@ -66,7 +66,8 @@ export function CalendarView() {
   return (
     <div className="h-full flex flex-col">
       <ViewHeader
-        title="Calendar"
+        eyebrow="CALENDAR"
+        title="Stay in sync. Make it happen together."
         subtitle={monthLabel}
         actions={
           <>

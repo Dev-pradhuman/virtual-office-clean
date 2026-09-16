@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   ACCENT_OPTIONS,
   BACKDROP_OPTIONS,
@@ -9,7 +9,7 @@ import {
   type SidebarSide,
   type UpdateChannel,
 } from "@/lib/app-context";
-import { SAMPLE_AUDIT } from "@/lib/sample-data";
+import { apiFetch } from "@/lib/api";
 import { Avatar, Card } from "../ui-bits";
 import { ViewHeader } from "./_header";
 import { cn } from "@/lib/utils";
@@ -17,20 +17,21 @@ import { LogOut, User2, ShieldCheck, Save, Power } from "lucide-react";
 
 type Tab = "me" | "admin";
 
-export function SettingsView() {
+export function SettingsView({ initialTab = "me" }: { initialTab?: Tab }) {
   const { currentUser } = useApp();
   const isAdmin = currentUser?.role === "admin";
-  const [tab, setTab] = useState<Tab>("me");
+  const [tab, setTab] = useState<Tab>(isAdmin ? initialTab : "me");
   if (!currentUser) return null;
 
   return (
     <div className="h-full flex flex-col">
       <ViewHeader
-        title="Settings"
-        subtitle="Personalize your view or (if admin) configure the workspace"
+        eyebrow="SETTINGS"
+        title="Make V-OFFICE yours."
+        subtitle="Personalize your experience. Stay connected. Work your way."
       />
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto p-6">
+        <div className="max-w-5xl mx-auto p-6">
           <div className="inline-flex items-center gap-1 rounded-full border border-border bg-card p-1 mb-6">
             <TabButton active={tab === "me"} onClick={() => setTab("me")} icon={<User2 className="size-3.5" />}>
               My Preferences
@@ -347,6 +348,13 @@ function AdminSettings() {
   const { adminConfig, setAdminConfig, users, adminUserPermissions, setUserShutdownPermission } = useApp();
   const [permissionError, setPermissionError] = useState("");
   const [permissionSaving, setPermissionSaving] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<{ sessions: Array<{ id: number; username?: string; cpu_usage?: number; ram_usage?: number; current_label?: string }>; logs: Array<{ id: number; username?: string; status?: string; reason?: string; timestamp?: string }> }>({ sessions: [], logs: [] });
+  const [adminDataError, setAdminDataError] = useState("");
+  useEffect(() => {
+    apiFetch<typeof analytics>("/api/admin/analytics")
+      .then(setAnalytics)
+      .catch((error) => setAdminDataError(error instanceof Error ? error.message : "Could not load admin activity"));
+  }, []);
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 flex items-start gap-2.5 text-xs">
@@ -458,40 +466,36 @@ function AdminSettings() {
 
       <SectionCard title="Analytics" description="Live snapshot of workspace health.">
         <div className="grid grid-cols-4 gap-3 mb-5">
-          <Stat label="Active sessions" value="7" />
-          <Stat label="Avg CPU" value="18%" />
-          <Stat label="Avg RAM" value="412 MB" />
-          <Stat label="Network" value="1.2 MB/s" />
+          <Stat label="Active sessions" value={String(analytics.sessions.length)} />
+          <Stat label="Online users" value={String(users.filter((user) => user.status === "online").length)} />
+          <Stat label="Avg CPU" value={analytics.sessions.length ? `${Math.round(analytics.sessions.reduce((sum, item) => sum + Number(item.cpu_usage || 0), 0) / analytics.sessions.length)}%` : "—"} />
+          <Stat label="Avg RAM" value={analytics.sessions.length ? `${Math.round(analytics.sessions.reduce((sum, item) => sum + Number(item.ram_usage || 0), 0) / analytics.sessions.length)}%` : "—"} />
         </div>
         <div className="rounded-lg border border-border overflow-hidden">
-          <div className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px] px-3 py-2 bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+          <div className="grid grid-cols-[minmax(0,1fr)_70px_70px_minmax(0,150px)] px-3 py-2 bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
             <div>User</div>
-            <div className="text-right">1d</div>
-            <div className="text-right">7d</div>
-            <div className="text-right">30d</div>
+            <div className="text-right">CPU</div>
+            <div className="text-right">RAM</div>
+            <div className="text-right">Activity</div>
           </div>
-          {users.map((u, i) => (
+          {analytics.sessions.map((session) => (
             <div
-              key={u.id}
-              className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px] px-3 py-2 items-center border-t border-border/60 text-sm"
+              key={session.id}
+              className="grid grid-cols-[minmax(0,1fr)_70px_70px_minmax(0,150px)] px-3 py-2 items-center border-t border-border/60 text-sm"
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <Avatar user={u} size={22} />
-                <span className="truncate">{u.name}</span>
-              </div>
-              <div className="text-right font-mono text-xs text-muted-foreground">{4 + i}h</div>
-              <div className="text-right font-mono text-xs text-muted-foreground">{22 + i * 4}h</div>
-              <div className="text-right font-mono text-xs text-muted-foreground">{88 + i * 6}h</div>
+              <div className="truncate">{session.username || "Unknown user"}</div>
+              <div className="text-right font-mono text-xs text-muted-foreground">{session.cpu_usage == null ? "—" : `${session.cpu_usage}%`}</div>
+              <div className="text-right font-mono text-xs text-muted-foreground">{session.ram_usage == null ? "—" : `${session.ram_usage}%`}</div>
+              <div className="truncate text-right text-xs text-muted-foreground">{session.current_label || "Connected"}</div>
             </div>
           ))}
+          {!analytics.sessions.length && <div className="px-3 py-5 text-center text-xs text-muted-foreground">No active sessions.</div>}
         </div>
       </SectionCard>
 
-      <SectionCard title="Audit log">
+      <SectionCard title="Presence & session history">
         <div className="rounded-lg border border-border overflow-hidden">
-          {SAMPLE_AUDIT.map((row, i) => {
-            const u = users.find((x) => x.id === row.actorId);
-            return (
+          {analytics.logs.map((row, i) => (
               <div
                 key={row.id}
                 className={cn(
@@ -500,20 +504,20 @@ function AdminSettings() {
                 )}
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  {u && <Avatar user={u} size={20} />}
-                  <span className="truncate">{u?.name}</span>
+                  <span className="truncate">{row.username || "Unknown user"}</span>
                 </div>
                 <div className="min-w-0 truncate">
-                  <span className="text-foreground">{row.action}</span>
-                  <span className="text-muted-foreground"> · {row.target}</span>
+                  <span className="text-foreground capitalize">{row.status || "session update"}</span>
+                  {row.reason && <span className="text-muted-foreground"> · {row.reason}</span>}
                 </div>
                 <div className="text-right text-muted-foreground font-mono text-[10px]">
                   {row.timestamp}
                 </div>
               </div>
-            );
-          })}
+          ))}
+          {!analytics.logs.length && <div className="px-3 py-5 text-center text-xs text-muted-foreground">No presence history yet.</div>}
         </div>
+        {adminDataError && <p className="mt-2 text-xs text-red-400">{adminDataError}</p>}
       </SectionCard>
     </div>
   );

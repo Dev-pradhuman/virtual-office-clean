@@ -85,6 +85,7 @@ export function ChatView() {
       <ViewHeader
         title={dm ? dm.name : `# ${activeChannel}`}
         subtitle={dm ? dm.designation : `${users.length} members · Public channel`}
+        compact
       />
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         <aside className="w-full md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-border bg-card/40 flex flex-col max-h-44 md:max-h-none">
@@ -313,6 +314,28 @@ export function ChatView() {
             </form>
           </div>
         </div>
+        <aside className="hidden xl:block w-72 shrink-0 border-l border-border bg-card/25 p-4 overflow-y-auto">
+          <div className="vo-eyebrow">{dm ? "DIRECT MESSAGE" : "CHANNEL INFO"}</div>
+          <h3 className="mt-2 text-sm font-semibold">{dm ? dm.name : `# ${activeChannel}`}</h3>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+            {dm ? (dm.statusMessage || dm.designation) : "A shared room for your headquarters."}
+          </p>
+          <div className="mt-7 flex items-center justify-between">
+            <h4 className="vo-section-title">People</h4>
+            <span className="text-[10px] text-muted-foreground">{dm ? 2 : users.length}</span>
+          </div>
+          <div className="mt-2 divide-y divide-border/70">
+            {(dm ? [currentUser, dm] : users).map((user) => (
+              <div key={user.id} className="flex items-center gap-2 py-3">
+                <Avatar user={user} size={28} showStatus />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-xs font-medium">{user.name}</div>
+                  <div className="truncate text-[10px] text-muted-foreground">{user.status === "online" ? "Online" : "Offline"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
   );
