@@ -362,10 +362,12 @@ Only a granted user gets the **Turn Off Virtual Office** action. It emits a
 graceful-exit event, disconnects, writes `userData/vo-intentional-shutdown.json`
 and `userData/vo-watchdog.stop`, disables login autostart, and exits.
 
-Packaged builds still use the detached watchdog and OS keep-alive task for
-unexpected failures. Both respect the intentional-shutdown marker. Hidden
-autostart launches respect it too. A visible manual launch clears the marker
-and stop flag, rearms recovery, and restores normal autostart.
+Packaged builds use the app-owned detached watchdog for unexpected failures.
+The watchdog and hidden autostart launches respect the intentional-shutdown
+marker. A visible manual launch clears the marker and stop flag, rearms crash
+recovery, and restores normal configured autostart. Older external scheduled
+tasks and relauncher scripts are removed by a one-time migration and are never
+recreated.
 
 ## 10. Recent bug fixes
 

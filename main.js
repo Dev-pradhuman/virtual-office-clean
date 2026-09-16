@@ -171,162 +171,60 @@ function startWatchdog() {
   }
 }
 
-// --- Windows keep-alive scheduled task -------------------------------------
-// The in-process watchdog covers a crash or a kill of the main process, but if
-// someone force-kills the whole process tree (watchdog included), only a wholly
-// external supervisor can bring the app back. A per-user Scheduled Task —
-// triggered at logon and repeating every minute — does exactly that, and also
-// restores the app after a reboot. It launches the app ONLY when it isn't
-// already running and NOT when a permitted user intentionally turned it off
-// (the same stop-flag the watchdog honors), and it needs no admin rights.
-const KEEPALIVE_TASK = 'VirtualOfficeKeepAlive';
-const relauncherVbsPath = () => path.join(app.getPath('userData'), 'vo-relauncher.vbs');
-const keepAliveXmlPath = () => path.join(app.getPath('userData'), 'vo-keepalive.xml');
-const xmlEscape = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Remove external supervisors shipped by older builds. This migration is
+// idempotent and never recreates them; persistence now consists of normal OS
+// autostart, tray background operation, and the app-owned watchdog only.
+const legacySupervisorCleanupMarker = () => path.join(app.getPath('userData'), 'vo-external-supervisor-cleanup-v1');
+const legacySupervisorArtifacts = () => [
+  path.join(app.getPath('userData'), 'vo-relauncher.vbs'),
+  path.join(app.getPath('userData'), 'vo-keepalive.xml'),
+  path.join(app.getPath('userData'), 'vo-relauncher.sh')
+];
 
-function writeRelauncherVbs() {
-  // wscript runs this silently (no console flash). It relaunches the exe unless
-  // the app is already running or a stop-flag marks an intentional quit.
-  const lines = [
-    'Dim exePath, stopFlag, intentMarker, fso, wmi, procs, running, p, shell',
-    'exePath = "' + process.execPath + '"',
-    'stopFlag = "' + stopFlagPath() + '"',
-    'intentMarker = "' + intentionalShutdownPath() + '"',
-    'Set fso = CreateObject("Scripting.FileSystemObject")',
-    'If fso.FileExists(stopFlag) Then WScript.Quit',
-    'If fso.FileExists(intentMarker) Then WScript.Quit',
-    'Set wmi = GetObject("winmgmts:")',
-    'Set procs = wmi.ExecQuery("SELECT ProcessId FROM Win32_Process WHERE Name = ' + "'Virtual Office.exe'" + '")',
-    'running = False',
-    'For Each p In procs',
-    '  running = True',
-    'Next',
-    'If Not running Then',
-    '  Set shell = CreateObject("WScript.Shell")',
-    '  shell.Run """" & exePath & """", 1, False',
-    'End If',
-    ''
-  ];
-  fs.writeFileSync(relauncherVbsPath(), lines.join('\r\n'), 'utf8');
-}
+function cleanupLegacyExternalSupervisors() {
+  if (fs.existsSync(legacySupervisorCleanupMarker())) return Promise.resolve();
 
-function writeKeepAliveXml() {
-  const args = xmlEscape('"' + relauncherVbsPath() + '"');
-  // Scope the task to the current user so it can be created without admin.
-  // A LogonTrigger fires it right when the user signs in; a TimeTrigger with a
-  // 1-minute repetition keeps it firing continuously during the session (the
-  // LogonTrigger's own repetition wouldn't start until the next logon).
-  const user = xmlEscape(((process.env.USERDOMAIN || process.env.COMPUTERNAME || '') + '\\' + (process.env.USERNAME || '')).replace(/^\\/, ''));
-  const xml = `<?xml version="1.0" encoding="UTF-16"?>
-<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo>
-    <Description>Keeps Virtual Office running (relaunches it if it is closed).</Description>
-  </RegistrationInfo>
-  <Triggers>
-    <LogonTrigger>
-      <Enabled>true</Enabled>
-      <UserId>${user}</UserId>
-    </LogonTrigger>
-    <TimeTrigger>
-      <Enabled>true</Enabled>
-      <StartBoundary>2024-01-01T00:00:00</StartBoundary>
-      <Repetition>
-        <Interval>PT1M</Interval>
-        <StopAtDurationEnd>false</StopAtDurationEnd>
-      </Repetition>
-    </TimeTrigger>
-  </Triggers>
-  <Principals>
-    <Principal id="Author">
-      <UserId>${user}</UserId>
-      <LogonType>InteractiveToken</LogonType>
-      <RunLevel>LeastPrivilege</RunLevel>
-    </Principal>
-  </Principals>
-  <Settings>
-    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
-    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
-    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
-    <AllowHardTerminate>true</AllowHardTerminate>
-    <StartWhenAvailable>true</StartWhenAvailable>
-    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
-    <IdleSettings>
-      <StopOnIdleEnd>false</StopOnIdleEnd>
-      <RestartOnIdle>false</RestartOnIdle>
-    </IdleSettings>
-    <AllowStartOnDemand>true</AllowStartOnDemand>
-    <Enabled>true</Enabled>
-    <Hidden>false</Hidden>
-    <ExecutionTimeLimit>PT1M</ExecutionTimeLimit>
-    <Priority>7</Priority>
-  </Settings>
-  <Actions Context="Author">
-    <Exec>
-      <Command>wscript.exe</Command>
-      <Arguments>${args}</Arguments>
-    </Exec>
-  </Actions>
-</Task>`;
-  // Task Scheduler expects UTF-16 with a BOM to match the XML declaration.
-  fs.writeFileSync(keepAliveXmlPath(), '﻿' + xml, 'utf16le');
-}
+  let filesRemoved = true;
+  for (const artifact of legacySupervisorArtifacts()) {
+    try {
+      if (fs.existsSync(artifact)) fs.unlinkSync(artifact);
+    } catch (e) {
+      filesRemoved = false;
+      console.error('[migration] Could not remove obsolete supervisor artifact:', artifact, e.message);
+    }
+  }
 
-const relauncherShPath = () => path.join(app.getPath('userData'), 'vo-relauncher.sh');
-
-function writeRelauncherSh() {
-  const lines = [
-    '#!/bin/bash',
-    `EXE_PATH="${process.execPath}"`,
-    `STOP_FLAG="${stopFlagPath()}"`,
-    `INTENT_MARKER="${intentionalShutdownPath()}"`,
-    'while true; do',
-    '  sleep 5',
-    '  if [ -f "$STOP_FLAG" ]; then',
-    '    exit 0',
-    '  fi',
-    '  if [ -f "$INTENT_MARKER" ]; then',
-    '    exit 0',
-    '  fi',
-    '  if ! ps -x -o command | grep -E -i "virtual-office|virtual office" | grep -v "grep" | grep -v "vo-relauncher.sh" > /dev/null; then',
-    '    "$EXE_PATH" &',
-    '  fi',
-    'done'
-  ];
-  fs.writeFileSync(relauncherShPath(), lines.join('\n'), { mode: 0o755 });
-}
-
-function ensureLinuxKeepAliveTask() {
-  if (process.platform !== 'linux' || !app.isPackaged) return;
-  try {
-    writeRelauncherSh();
-    exec('pgrep -f vo-relauncher.sh', (err, stdout) => {
-      if (err || !stdout.trim()) {
-        const child = spawn(relauncherShPath(), [], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        child.unref();
-        console.log('[keepalive] linux watchdog started.');
+  return new Promise((resolve) => {
+    const finish = (successful) => {
+      if (successful && filesRemoved) {
+        try { fs.writeFileSync(legacySupervisorCleanupMarker(), String(Date.now())); } catch (e) {}
       }
-    });
-  } catch (e) {
-    console.error('[keepalive] error:', e);
-  }
-}
+      resolve();
+    };
 
-function ensureKeepAliveTask() {
-  if (process.platform !== 'win32' || !app.isPackaged) return;
-  try {
-    writeRelauncherVbs();
-    writeKeepAliveXml();
-    // /F overwrites so re-running self-heals the paths after an update/move.
-    execFile('schtasks', ['/Create', '/TN', KEEPALIVE_TASK, '/XML', keepAliveXmlPath(), '/F'], (err, _stdout, stderr) => {
-      if (err) console.error('[keepalive] could not register scheduled task:', (stderr || err.message || '').trim());
-      else console.log('[keepalive] scheduled task registered (logon + every 1 min).');
-    });
-  } catch (e) {
-    console.error('[keepalive] error:', e);
-  }
+    if (process.platform === 'win32') {
+      execFile('schtasks', ['/Query', '/TN', 'VirtualOfficeKeepAlive'], { windowsHide: true }, (queryError) => {
+        if (queryError) return finish(true);
+        execFile('schtasks', ['/Delete', '/TN', 'VirtualOfficeKeepAlive', '/F'], { windowsHide: true }, (deleteError) => {
+          if (deleteError) console.error('[migration] Could not remove obsolete VirtualOfficeKeepAlive task:', deleteError.message);
+          finish(!deleteError);
+        });
+      });
+      return;
+    }
+
+    if (process.platform === 'linux') {
+      const oldScript = path.join(app.getPath('userData'), 'vo-relauncher.sh');
+      execFile('pkill', ['-f', oldScript], (error) => {
+        const successful = !error || error.code === 1;
+        if (!successful) console.error('[migration] Could not stop obsolete Linux relauncher:', error.message);
+        finish(successful);
+      });
+      return;
+    }
+
+    finish(true);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -981,7 +879,8 @@ function createTray() {
   tray.on('double-click', showMainWindow);
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await cleanupLegacyExternalSupervisors();
   if (startHidden && hasIntentionalShutdown()) {
     app.isQuitting = true;
     app.quit();
@@ -1013,8 +912,6 @@ app.whenReady().then(() => {
   // intentional-shutdown marker is only cleared by a visible manual launch.
   clearStopFlag();
   startWatchdog();
-  ensureKeepAliveTask();
-  ensureLinuxKeepAliveTask();
 
   // Read config and apply autostart (runs safely after app ready when safeStorage is active)
   try {
@@ -1048,24 +945,23 @@ app.whenReady().then(() => {
 });
 
 // Launch automatically when the user logs into Windows/macOS (if configured).
-function applyAutostartSettings(enabled) {
-  // Full-off is the only application-level way to disable automatic startup.
-  enabled = !hasIntentionalShutdown();
+function applyAutostartSettings(configuredAutostartEnabled) {
+  const shouldAutostart = configuredAutostartEnabled && !hasIntentionalShutdown();
   if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
     try {
       if (app.isPackaged) {
         app.setLoginItemSettings({
-          openAtLogin: !!enabled,
+          openAtLogin: shouldAutostart,
           args: ['--hidden']
         });
       } else {
         app.setLoginItemSettings({
-          openAtLogin: !!enabled,
+          openAtLogin: shouldAutostart,
           path: process.execPath,
           args: [path.resolve(__dirname), '--hidden']
         });
       }
-      console.log(`[autostart] set openAtLogin to ${!!enabled}`);
+      console.log(`[autostart] set openAtLogin to ${shouldAutostart}`);
     } catch (e) {
       console.error('[autostart] failed to set login settings:', e);
     }
