@@ -6,7 +6,7 @@ since native modules can't be cross-compiled from Windows).
 
 The app is an Electron desktop client that bundles its own backend and connects
 to your team's Headquarters (HQ) server. Default HQ:
-`https://virtual-office-hq-test.onrender.com`.
+`https://virtual-office-clean.onrender.com`.
 
 ---
 

@@ -4,7 +4,7 @@ let socket = null;
 let users = [];
 // Default to the shared Render HQ so everyone lands on the same server. Can be
 // overridden per-login via the "Headquarters Address" field; saved after login.
-let API_URL = 'https://virtual-office-hq-test.onrender.com';
+let API_URL = 'https://virtual-office-clean.onrender.com';
 
 // DOM Elements
 const authScreen = document.getElementById('auth-screen');

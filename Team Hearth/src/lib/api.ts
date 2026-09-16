@@ -21,7 +21,7 @@ const CREDS_KEY = "vo:creds";
 
 // Default team headquarters. Used to pre-fill the login screen when the user
 // hasn't connected before.
-export const DEFAULT_HQ = "https://virtual-office-hq-test.onrender.com";
+export const DEFAULT_HQ = "https://virtual-office-clean.onrender.com";
 
 // ---- saved login (opt-in "remember me") -----------------------------------
 // Stored locally on the user's own machine so the desktop app can pre-fill the
