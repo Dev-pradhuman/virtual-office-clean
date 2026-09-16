@@ -10,6 +10,7 @@
     "start:server": "node server-only.js",
     "test": "node --test tests/*.test.js",
     "build:frontend": "npm --prefix \"Team Hearth\" run build",
+    "build:render": "npm install --omit=dev --omit=optional && npm --prefix \"Team Hearth\" install && npm run build:frontend",
     "build:win": "npm run build:frontend && electron-builder --win",
     "build:linux": "npm run build:frontend && electron-builder --linux",
     "build": "npm run build:frontend && electron-builder"
