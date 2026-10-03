@@ -49,3 +49,12 @@ scratch/
 .antigravity/
 .gemini/
 .claude/
+__pycache__/
+*.pyc
+venv/
+.venv/
+env/
+build/
+.next/
+.cache/
+*.log
